@@ -1,18 +1,25 @@
 {
-  "name": "wink",
+  "name": "wink-marketplace",
   "owner": {
-    "name": "Kishore"
+    "name": "Kishore",
+    "url": "https://github.com/skishore23"
   },
   "metadata": {
-    "description": "Discipline plugin for Claude Code - enforces verification before stopping, detects loops, tracks evidence",
-    "homepage": "https://github.com/skishore23/wink"
+    "description": "Plugin marketplace for Wink - Claude Code discipline plugin",
+    "version": "1.0.0"
   },
   "plugins": [
     {
       "name": "wink",
+      "description": "Enforces verification before stopping, detects loops, tracks evidence",
       "version": "1.0.0",
-      "source": ".",
-      "description": "Enforces verification before stopping, detects loops, tracks evidence"
+      "author": {
+        "name": "Kishore",
+        "url": "https://github.com/skishore23"
+      },
+      "homepage": "https://github.com/skishore23/wink",
+      "tags": ["verification", "discipline", "loops", "evidence"],
+      "source": "./"
     }
   ]
 }
