@@ -1,7 +1,7 @@
 {
   "name": "wink-marketplace",
   "owner": {
-    "name": "Kishore",
+    "name": "skishore23",
     "url": "https://github.com/skishore23"
   },
   "metadata": {
@@ -14,7 +14,7 @@
       "description": "Enforces verification before stopping, detects loops, tracks evidence",
       "version": "1.0.0",
       "author": {
-        "name": "Kishore",
+        "name": "skishore23",
         "url": "https://github.com/skishore23"
       },
       "homepage": "https://github.com/skishore23/wink",
