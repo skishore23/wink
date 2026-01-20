@@ -1,6 +1,6 @@
 # Wink
 
-**A Claude Code plugin that enforces discipline and auto-generates specialized agents from your coding patterns.**
+**A Claude Code plugin that enforces discipline and auto-generates specialized agents from claude's coding patterns.**
 
 ---
 
