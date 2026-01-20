@@ -7,8 +7,6 @@
   },
   "repository": "https://github.com/skishore23/wink",
   "license": "MIT",
-  "hooks": "./hooks/hooks.json",
-  "commands": "./commands",
   "keywords": [
     "claude-code",
     "self-learning",
