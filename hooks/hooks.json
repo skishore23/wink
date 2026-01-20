@@ -4,7 +4,7 @@
     "UserPromptSubmit": [{
       "hooks": [{
         "type": "command",
-        "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/userPromptSubmit.js"
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/userPromptSubmit.ts"
       }]
     }],
 
@@ -13,28 +13,28 @@
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [{
           "type": "command",
-          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/preToolUse.js"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/preToolUse.ts"
         }]
       },
       {
         "matcher": "Read|View",
         "hooks": [{
           "type": "command",
-          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/preToolUse.js"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/preToolUse.ts"
         }]
       },
       {
         "matcher": "Grep",
         "hooks": [{
           "type": "command",
-          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/preToolUse.js"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/preToolUse.ts"
         }]
       },
       {
         "matcher": "Task",
         "hooks": [{
           "type": "command",
-          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/preToolUse.js"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/preToolUse.ts"
         }]
       }
     ],
@@ -44,21 +44,21 @@
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [{
           "type": "command",
-          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/postEdit.js"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/postEdit.ts"
         }]
       },
       {
         "matcher": "Read|View|Grep|Glob",
         "hooks": [{
           "type": "command",
-          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/postRead.js"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/postRead.ts"
         }]
       },
       {
         "matcher": ".*",
         "hooks": [{
           "type": "command",
-          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/postToolUse.js"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/postToolUse.ts"
         }]
       }
     ],
@@ -66,21 +66,21 @@
     "Stop": [{
       "hooks": [{
         "type": "command",
-        "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/stopGate.js"
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/stopGate.ts"
       }]
     }],
 
     "SubagentStop": [{
       "hooks": [{
         "type": "command",
-        "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/stopGate.js"
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/stopGate.ts"
       }]
     }],
 
     "SessionStart": [{
       "hooks": [{
         "type": "command",
-        "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/sessionStart.js"
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/sessionStart.ts"
       }]
     }]
   }
