@@ -1,0 +1,86 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [{
+      "hooks": [{
+        "type": "command",
+        "command": "bun /Users/kishore/wink/dist/hooks/userPromptSubmit.js"
+      }]
+    }],
+
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [{
+          "type": "command",
+          "command": "bun /Users/kishore/wink/dist/hooks/preToolUse.js"
+        }]
+      },
+      {
+        "matcher": "Read|View",
+        "hooks": [{
+          "type": "command",
+          "command": "bun /Users/kishore/wink/dist/hooks/preToolUse.js"
+        }]
+      },
+      {
+        "matcher": "Grep",
+        "hooks": [{
+          "type": "command",
+          "command": "bun /Users/kishore/wink/dist/hooks/preToolUse.js"
+        }]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [{
+          "type": "command",
+          "command": "bun /Users/kishore/wink/dist/hooks/preToolUse.js"
+        }]
+      }
+    ],
+
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [{
+          "type": "command",
+          "command": "bun /Users/kishore/wink/dist/hooks/postEdit.js"
+        }]
+      },
+      {
+        "matcher": "Read|View|Grep|Glob",
+        "hooks": [{
+          "type": "command",
+          "command": "bun /Users/kishore/wink/dist/hooks/postRead.js"
+        }]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [{
+          "type": "command",
+          "command": "bun /Users/kishore/wink/dist/hooks/postToolUse.js"
+        }]
+      }
+    ],
+
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "bun /Users/kishore/wink/dist/hooks/stopGate.js"
+      }]
+    }],
+
+    "SubagentStop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "bun /Users/kishore/wink/dist/hooks/stopGate.js"
+      }]
+    }],
+
+    "SessionStart": [{
+      "hooks": [{
+        "type": "command",
+        "command": "bun /Users/kishore/wink/dist/hooks/sessionStart.js"
+      }]
+    }]
+  }
+}

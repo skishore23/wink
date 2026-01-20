@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "types": ["bun-types"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    
+    /* Strict Type-Checking Options */
+    "strict": true,                           /* Enable all strict type-checking options */
+    "noImplicitAny": true,                   /* Raise error on expressions with 'any' type */
+    "strictNullChecks": true,                /* Enable strict null checks */
+    "strictFunctionTypes": true,             /* Enable strict checking of function types */
+    "strictBindCallApply": true,             /* Enable strict 'bind', 'call', and 'apply' */
+    "strictPropertyInitialization": true,    /* Enable strict checking of property initialization */
+    "noImplicitThis": true,                  /* Raise error on 'this' expressions with 'any' type */
+    "alwaysStrict": true,                    /* Parse in strict mode and emit "use strict" */
+    
+    /* Additional Checks */
+    "noImplicitReturns": true,               /* Report error when not all paths return value */
+    "noFallthroughCasesInSwitch": true,     /* Report errors for fallthrough cases */
+    
+    /* Code Quality */
+    "allowUnreachableCode": false,           /* Disable warnings for unreachable code */
+    "allowUnusedLabels": false,              /* Disable warnings for unused labels */
+    
+    /* Module Resolution */
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    
+    /* Emit */
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "removeComments": false,                 /* Keep comments for documentation */
+    "noEmitOnError": true                   /* Do not emit outputs if any errors */
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "src/tests"]
+}

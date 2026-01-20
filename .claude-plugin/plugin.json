@@ -1,0 +1,45 @@
+{
+  "name": "wink",
+  "version": "1.0.0",
+  "description": "Discipline plugin for Claude Code - enforces verification, detects loops, tracks evidence",
+  "author": {
+    "name": "Kishore"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/skishore23/wink"
+  },
+  "license": "MIT",
+  "main": "dist/index.js",
+  "hooks": "./hooks/hooks.json",
+  "commands": "./commands",
+  "keywords": [
+    "claude-code",
+    "discipline",
+    "evidence-gate",
+    "stop-gate",
+    "loop-blocking",
+    "verification"
+  ],
+  "features": {
+    "evidence-gate": {
+      "description": "Warns when editing files without reading them first",
+      "enabled": true
+    },
+    "stop-gate": {
+      "description": "Prevents stopping with broken or unverified code",
+      "enabled": true
+    },
+    "loop-blocking": {
+      "description": "Blocks repetitive reads/searches after configurable threshold",
+      "enabled": true
+    },
+    "session-save": {
+      "description": "Auto-saves session summary for continuity",
+      "enabled": true
+    }
+  },
+  "requirements": {
+    "bun": ">=1.0.0"
+  }
+}
