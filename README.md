@@ -56,14 +56,8 @@ Files must be read before editing. Prevents blind modifications.
 
 Inside Claude Code:
 ```
-/plugin install github:skishore23/wink
-```
-
-Or add to your project's `.claude/settings.json`:
-```json
-{
-  "plugins": ["github:skishore23/wink"]
-}
+/plugin marketplace add skishore23/wink
+/plugin install wink@wink
 ```
 
 ### Option 2: Manual Installation
