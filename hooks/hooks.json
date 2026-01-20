@@ -1,9 +1,10 @@
 {
+  "description": "Wink discipline hooks - enforces verification, detects loops, tracks evidence",
   "hooks": {
     "UserPromptSubmit": [{
       "hooks": [{
         "type": "command",
-        "command": "bun /Users/kishore/wink/dist/hooks/userPromptSubmit.js"
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/userPromptSubmit.js"
       }]
     }],
 
@@ -12,28 +13,28 @@
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [{
           "type": "command",
-          "command": "bun /Users/kishore/wink/dist/hooks/preToolUse.js"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/preToolUse.js"
         }]
       },
       {
         "matcher": "Read|View",
         "hooks": [{
           "type": "command",
-          "command": "bun /Users/kishore/wink/dist/hooks/preToolUse.js"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/preToolUse.js"
         }]
       },
       {
         "matcher": "Grep",
         "hooks": [{
           "type": "command",
-          "command": "bun /Users/kishore/wink/dist/hooks/preToolUse.js"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/preToolUse.js"
         }]
       },
       {
         "matcher": "Task",
         "hooks": [{
           "type": "command",
-          "command": "bun /Users/kishore/wink/dist/hooks/preToolUse.js"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/preToolUse.js"
         }]
       }
     ],
@@ -43,21 +44,21 @@
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [{
           "type": "command",
-          "command": "bun /Users/kishore/wink/dist/hooks/postEdit.js"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/postEdit.js"
         }]
       },
       {
         "matcher": "Read|View|Grep|Glob",
         "hooks": [{
           "type": "command",
-          "command": "bun /Users/kishore/wink/dist/hooks/postRead.js"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/postRead.js"
         }]
       },
       {
         "matcher": ".*",
         "hooks": [{
           "type": "command",
-          "command": "bun /Users/kishore/wink/dist/hooks/postToolUse.js"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/postToolUse.js"
         }]
       }
     ],
@@ -65,21 +66,21 @@
     "Stop": [{
       "hooks": [{
         "type": "command",
-        "command": "bun /Users/kishore/wink/dist/hooks/stopGate.js"
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/stopGate.js"
       }]
     }],
 
     "SubagentStop": [{
       "hooks": [{
         "type": "command",
-        "command": "bun /Users/kishore/wink/dist/hooks/stopGate.js"
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/stopGate.js"
       }]
     }],
 
     "SessionStart": [{
       "hooks": [{
         "type": "command",
-        "command": "bun /Users/kishore/wink/dist/hooks/sessionStart.js"
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/sessionStart.js"
       }]
     }]
   }
