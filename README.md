@@ -1,6 +1,12 @@
-# Wink
+<div align="center">
 
-**A Claude Code plugin that enforces discipline and auto-generates specialized agents from Claude's usage patterns.**
+<h1>(• ◡ -)  Wink</h1>
+
+**Discipline + Learning for Claude Code**
+
+*Auto-generate agents • Enforce verification • Adapt over time*
+
+</div>
 
 ---
 
@@ -8,14 +14,13 @@
 
 ### Auto-Generate Agents from Usage
 
-The `/wink` command analyzes your session data and suggests specialized agents based on how claude *actually* uses the codebase:
+The `/wink` command analyzes session data and suggests specialized agents based on how Claude *actually* uses the codebase:
 
-- **Hot folder experts** - Heavily edited directories get dedicated agents
-- **Error fixers** - Recurring error patterns generate fix-focused agents
-- **Context keepers** - Files read 5+ times get cached to prevent context loss
+- **Hot folder experts** - Heavily edited directories get dedicated agents  
+- **Context keepers** - Files read 5+ times get summarized to prevent re-reads
 - **Language specialists** - Project-type-specific agents with build/test/lint commands
 
-Run `/wink --apply` to create these agents automatically.
+Run `/wink --apply` to generate agents with rich, cached content.
 
 ### Self-Learning System
 
@@ -31,9 +36,9 @@ Data is stored in `.wink/session.db` (SQLite) with tables for agent usage, error
 
 ### Stop Discipline
 
-Claude cannot stop until verification passes. No more "looks good to me" without evidence.
+Claude cannot stop until checks pass. No more "looks good to me" - show your work.
 
-### Evidence-Based Editing
+### Read Before Edit
 
 Files must be read before editing. Prevents blind modifications.
 
@@ -44,7 +49,7 @@ Files must be read before editing. Prevents blind modifications.
 - **Enforces verification before stopping** - Claude cannot stop until tests/lint/build pass
 - **Auto-generates agents** - Suggests specialized agents from session metrics
 - **Detects context loss** - Alerts when the same file is read repeatedly (5+ times)
-- **Tracks evidence** - Ensures files are read before being edited
+- **Read-before-edit** - Ensures files are read before being edited
 - **Learns and adapts** - Thresholds improve based on what works
 - **Logs quality failures** - Captures failing checks to drive quality-focused agents
 
@@ -52,7 +57,7 @@ Files must be read before editing. Prevents blind modifications.
 
 ## Installation
 
-### Option 1: Claude Code Plugin (Recommended)
+### Option 1: Claude Code Plugin
 
 Inside Claude Code:
 ```
@@ -104,8 +109,8 @@ Claude reads a file
 ┌──────────────────────────────────────┐
 │  PostToolUse Hook (Read)             │
 │  • Logs to database (enables /wink)  │
-│  • Marks file as "seen" (evidence)   │
-│  • Detects read loops (3+ times)     │
+│  • Marks file as "seen"              │
+│  • Warns on read loops (3+ reads)    │
 └──────────────────────────────────────┘
        ↓
 Claude edits a file
@@ -148,13 +153,13 @@ Claude tries to stop
 ### /wink Output
 
 ```
-wink · session analysis
+  ✦ wink · session analysis
 
 node · 45 edits · 120 reads · 32min
 
 hot folders
-  ████████████ src/core (28)
-  ████████ src/hooks (18)
+  ████████████ core (28)
+  ████████ hooks (18)
 
 context loss (files read 5+ times)
   12x storage.ts
@@ -169,9 +174,16 @@ agents
     + hooks-expert
       18 edits in hooks/, 25 re-reads (storage.ts, utils.ts)
 
-learnings
-  ✓ effective: core-expert
-  • core-expert agent reduced context loss
+learning
+
+  agents used: 15 (avg effectiveness: 72%)
+  ✓ effective: folder-expert, context-keeper
+
+  threshold adjustments
+    folder-expert: 20 → 18
+
+  insights
+    • Effective agents reduced context loss
 ```
 
 ---
@@ -208,18 +220,63 @@ Create `.wink/config.json` (or run `/setup`):
 
 ## Agent Generation
 
-Wink suggests four types of agents based on session metrics:
+Wink uses a **hybrid approach** that works across any codebase (Go, Python, Node, Rust, etc.):
+
+### How It Works
+
+1. **Hooks collect metrics** (runs in JS context)
+   - Tracks edits, reads, errors per file/folder
+   - Language-agnostic counting
+
+2. **Claude generates agents** (runs in Claude's context with LSP)
+   - When you run `/wink --apply`, Claude reads hot files
+   - Uses LSP to extract exports, types, function signatures
+   - Generates agents with actual cached knowledge
+
+### Agent Types
 
 | Agent Type | Trigger | Purpose |
 |------------|---------|---------|
-| **folder-expert** | 20+ edits in a folder | Deep knowledge of folder patterns and conventions |
-| **error-fixer** | 3+ of same error | Quick fixes for recurring error patterns |
-| **context-keeper** | 4+ reads of same file | Cache frequently accessed file contents |
+| **folder-expert** | 20+ edits in a folder | Cached exports, patterns, conventions for that folder |
+| **error-fixer** | 3+ of same error | Specific fix patterns for recurring errors |
+| **context-keeper** | 5+ reads of same file | Summarized content to prevent re-reads |
 | **lang-specialist** | Project type detected | Language-specific commands and best practices |
-| **quality-guard** | Any failing verification check | Focus on failing checks and quality hotspots |
-| **regression-fixer** | Regression detected in checks | Restore checks that used to pass |
+| **quality-guard** | Failing verification check | Focus on failing checks and quality hotspots |
+| **regression-fixer** | Regression detected | Restore checks that used to pass |
 
-Agents are written to `.claude/agents/` and can be invoked by Claude Code.
+### Rich Agent Content
+
+Unlike simple metadata agents, wink-generated agents contain **actual knowledge**:
+
+```markdown
+# Core Expert Agent
+
+## Key Files Summary (Generated: 2024-01-19)
+
+### storage.ts
+- Exports: getDb(), logEvent(), getCurrentSessionId(), logAgentSpawn()...
+- Pattern: SQLite with WAL mode, singleton database connection
+- Depends on: bun:sqlite, path, fs
+
+### config.ts
+- Exports: loadConfig(), getVerifiers()
+- Pattern: JSON config with defaults fallback
+
+## Conventions in core/
+
+- All DB access through getDb() singleton
+- Events logged via logEvent() for consistency
+- Thresholds are adaptive, not hardcoded
+```
+
+This makes agents useful as **knowledge containers**, not just activity reports.
+
+### Cross-Language Support
+
+Works for any language because:
+- Metric collection is language-agnostic (just file paths and counts)
+- Claude uses LSP for language-specific symbol extraction
+- Project type auto-detected (Go, Python, Node, Rust)
 
 ---
 
@@ -258,13 +315,14 @@ learning
 
   agents used: 15 (avg effectiveness: 72%)
   ✓ effective: folder-expert, context-keeper
-  ✗ ineffective: error-fixer
 
   threshold adjustments
     folder-expert: 20 → 18
 
   error patterns: 8 learned
     top: typescript-type (12x)
+
+  💡 predicted: core-expert (70%)
 
   insights
     • Effective agents: folder-expert, context-keeper
@@ -282,10 +340,10 @@ Run `/verify` to verify changes, fix any failing checks, then stop.
 ### Loop warnings
 
 ```
-! wink · read 'file.ts' 5x - consider making edits
+! wink · file.ts read 5x - context loss detected
 ```
 
-You're reading the same file repeatedly. Make the edit or use `/wink` to generate a context-keeper agent.
+You're reading the same file repeatedly. Make the edit or run `/wink --apply` to generate a context-keeper agent that caches the file summary.
 
 ---
 

@@ -1,35 +1,32 @@
 #!/usr/bin/env node
 
+/**
+ * Wink Command
+ * 
+ * Analyzes session data and suggests specialized agents.
+ * Uses hybrid approach: hooks collect metrics, Claude generates rich content.
+ */
+
 import * as fs from 'fs';
 import * as path from 'path';
 import { SessionAnalyzer, SessionInsights } from '../core/sessionAnalyzer';
-import { runLearningCycle, formatLearningReport } from '../core/learningEngine';
+import { runLearningCycle } from '../core/learningEngine';
+import * as print from '../core/printer';
 
-// Minimal colors
-const c = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  cyan: '\x1b[36m',
-  magenta: '\x1b[35m',
-};
+// ============================================================================
+// Types
+// ============================================================================
 
-// Artifact types that can be generated
 type ArtifactType = 'agent' | 'rule' | 'skill' | 'command' | 'hook';
 
 interface ArtifactSuggestion {
   type: ArtifactType;
   name: string;
-  metricEvidence: string;  // REQUIRED - specific data that justifies this
+  metricEvidence: string;
   description: string;
-  destination: string;     // Where to write it
-  content?: string;        // Optional pre-generated content
+  destination: string;
 }
 
-// Learning types
 interface Suggestion {
   date: string;
   type: ArtifactType;
@@ -42,12 +39,12 @@ interface Suggestion {
 interface WinkLearnings {
   suggestions: Suggestion[];
   patterns: {
-    hotFolderThreshold: number;      // edits needed to suggest agent
-    contextLossThreshold: number;    // reads needed to flag context loss
-    effectiveAgents: string[];       // agents that reduced re-reads
-    ineffectivePatterns: string[];   // patterns that didn't help
+    hotFolderThreshold: number;
+    contextLossThreshold: number;
+    effectiveAgents: string[];
+    ineffectivePatterns: string[];
   };
-  insights: string[];                // accumulated learnings
+  insights: string[];
 }
 
 const DEFAULT_LEARNINGS: WinkLearnings = {
@@ -61,11 +58,14 @@ const DEFAULT_LEARNINGS: WinkLearnings = {
   insights: []
 };
 
-function getLearningsPath(): string {
-  return path.join(process.cwd(), '.wink', 'learnings.json');
-}
+// ============================================================================
+// Persistence
+// ============================================================================
 
-function loadLearnings(): WinkLearnings {
+const getLearningsPath = (): string => 
+  path.join(process.cwd(), '.wink', 'learnings.json');
+
+const loadLearnings = (): WinkLearnings => {
   try {
     const filePath = getLearningsPath();
     if (fs.existsSync(filePath)) {
@@ -75,9 +75,9 @@ function loadLearnings(): WinkLearnings {
     // Return default on error
   }
   return { ...DEFAULT_LEARNINGS };
-}
+};
 
-function saveLearnings(learnings: WinkLearnings): void {
+const saveLearnings = (learnings: WinkLearnings): void => {
   try {
     const filePath = getLearningsPath();
     const dir = path.dirname(filePath);
@@ -88,42 +88,45 @@ function saveLearnings(learnings: WinkLearnings): void {
   } catch {
     // Silently fail
   }
-}
+};
 
-function checkArtifactExists(type: ArtifactType, name: string): boolean {
-  // For agents/skills/commands - check if the specific file exists
-  if (type === 'agent') {
-    return fs.existsSync(path.join(process.cwd(), '.claude', 'agents', `${name}.md`));
-  }
-  if (type === 'skill') {
-    // Skills can be in skills/ OR commands/ folder
-    return fs.existsSync(path.join(process.cwd(), '.claude', 'skills', `${name}.md`)) ||
-           fs.existsSync(path.join(process.cwd(), '.claude', 'commands', `${name}.md`));
-  }
-  if (type === 'command') {
-    return fs.existsSync(path.join(process.cwd(), '.claude', 'commands', `${name}.md`));
-  }
-  // For rules - always allow suggesting (user decides if it's in CLAUDE.md already)
-  if (type === 'rule') {
-    return false; // Always suggest rules, let Claude/user decide
-  }
-  if (type === 'hook') {
-    return fs.existsSync(path.join(process.cwd(), 'hooks', 'hooks.json'));
-  }
-  return false;
-}
+// ============================================================================
+// Artifact checking
+// ============================================================================
 
-function analyzeOutcomes(learnings: WinkLearnings, insights: SessionInsights): string[] {
+const checkArtifactExists = (type: ArtifactType, name: string): boolean => {
+  const base = process.cwd();
+  
+  switch (type) {
+    case 'agent':
+      return fs.existsSync(path.join(base, '.claude', 'agents', `${name}.md`));
+    case 'skill':
+      return fs.existsSync(path.join(base, '.claude', 'skills', `${name}.md`)) ||
+             fs.existsSync(path.join(base, '.claude', 'commands', `${name}.md`));
+    case 'command':
+      return fs.existsSync(path.join(base, '.claude', 'commands', `${name}.md`));
+    case 'rule':
+      return false; // Always suggest rules
+    case 'hook':
+      return fs.existsSync(path.join(base, 'hooks', 'hooks.json'));
+    default:
+      return false;
+  }
+};
+
+// ============================================================================
+// Analysis
+// ============================================================================
+
+const analyzeOutcomes = (learnings: WinkLearnings, insights: SessionInsights): string[] => {
   const newInsights: string[] = [];
 
-  // Check if previously suggested agents were created and helped
   for (const suggestion of learnings.suggestions) {
     if (suggestion.type === 'agent' && !suggestion.outcome) {
       const exists = checkArtifactExists('agent', suggestion.name);
 
       if (exists) {
         suggestion.created = true;
-        // Check if context loss improved (simplified check)
         const relatedReads = insights.loopPatterns.filter(l =>
           suggestion.name.includes(l.fileName.replace('.ts', '').split('/').pop() || '')
         );
@@ -139,115 +142,195 @@ function analyzeOutcomes(learnings: WinkLearnings, insights: SessionInsights): s
     }
   }
 
-  // Learn from patterns
   if (learnings.suggestions.length >= 3) {
     const created = learnings.suggestions.filter(s => s.created).length;
-    const total = learnings.suggestions.length;
-    const adoptionRate = created / total;
+    const adoptionRate = created / learnings.suggestions.length;
 
-    const lowAdoptionMsg = 'suggestions often ignored - may need higher thresholds';
-    if (adoptionRate < 0.3 && !learnings.insights.includes(lowAdoptionMsg)) {
-      newInsights.push(lowAdoptionMsg);
+    if (adoptionRate < 0.3 && !learnings.insights.includes('suggestions often ignored')) {
+      newInsights.push('suggestions often ignored - may need higher thresholds');
       learnings.patterns.hotFolderThreshold = Math.min(50, learnings.patterns.hotFolderThreshold + 10);
     }
   }
 
   return newInsights;
-}
+};
 
-// Create an agent file from suggestion
-function createAgent(suggestion: ArtifactSuggestion): boolean {
-  if (suggestion.type !== 'agent') return false;
+// ============================================================================
+// Suggestion generation
+// ============================================================================
 
-  const agentDir = path.join(process.cwd(), '.claude', 'agents');
-  const agentPath = path.join(agentDir, `${suggestion.name}.md`);
+const findExistingAgents = (insights: SessionInsights): Array<{ name: string; folder: string; editCount: number }> => {
+  const existing: Array<{ name: string; folder: string; editCount: number }> = [];
+  const projectRoot = process.cwd();
 
-  // Create directory if needed
-  if (!fs.existsSync(agentDir)) {
-    fs.mkdirSync(agentDir, { recursive: true });
+  for (const folder of insights.hotFolders) {
+    if (folder.path === projectRoot) continue;
+
+    const folderName = folder.path.split('/').pop() || 'core';
+    const agentName = `${folderName}-expert`;
+
+    if (checkArtifactExists('agent', agentName)) {
+      existing.push({ name: agentName, folder: folderName, editCount: folder.editCount });
+    }
   }
 
-  // Generate agent content
-  const folderName = suggestion.name.replace('-expert', '');
-  const content = `---
-name: ${suggestion.name}
-description: ${suggestion.description}
-tools: Read, Grep, Edit, Write
----
+  return existing;
+};
 
-# ${folderName.charAt(0).toUpperCase() + folderName.slice(1)} Expert Agent
+const generateSuggestions = (insights: SessionInsights, learnings: WinkLearnings): ArtifactSuggestion[] => {
+  const suggestions: ArtifactSuggestion[] = [];
+  const threshold = learnings.patterns.hotFolderThreshold;
+  const suggestedFolders = new Set<string>();
+  const projectRoot = process.cwd();
 
-You are a specialized agent with deep knowledge of the \`${folderName}/\` directory.
+  // Agent suggestions for hot folders
+  for (const folder of insights.hotFolders.slice(0, 3)) {
+    if (folder.editCount < threshold) continue;
+    if (folder.path === projectRoot) continue;
 
-## Evidence
+    const folderName = folder.path.split('/').pop() || 'core';
+    const agentName = `${folderName}-expert`;
 
-${suggestion.metricEvidence}
+    if (checkArtifactExists('agent', agentName)) continue;
+    if (suggestedFolders.has(folderName)) continue;
+    suggestedFolders.add(folderName);
 
-## Your Expertise
+    const relatedReads = insights.loopPatterns.filter(l =>
+      l.file.includes(folder.path) || folder.path.includes(path.dirname(l.file))
+    );
+    const totalReads = relatedReads.reduce((a, b) => a + b.readCount, 0);
 
-- Understand patterns and conventions in ${folderName}/
-- Know relationships between files in this area
-- Can suggest edits that follow existing conventions
-- Provide specific file references when asked
+    let evidence = `${folder.editCount} edits in ${folderName}/`;
+    if (totalReads > 0) {
+      evidence += `, ${totalReads} re-reads`;
+      const topFiles = relatedReads.slice(0, 2).map(r => r.fileName).join(', ');
+      if (topFiles) evidence += ` (${topFiles})`;
+    }
 
-## Usage
+    suggestions.push({
+      type: 'agent',
+      name: agentName,
+      metricEvidence: evidence,
+      description: `Expert on ${folderName}/ folder patterns and code`,
+      destination: `.claude/agents/${agentName}.md`,
+    });
+  }
 
-Use this agent when working on code in the ${folderName}/ folder.
-`;
+  // Rule suggestions for recurring errors
+  const significantErrors = insights.commonErrors.filter(e => e.count >= 3);
+  if (significantErrors.length > 0) {
+    const topError = significantErrors[0];
+    suggestions.push({
+      type: 'rule',
+      name: 'error-prevention',
+      metricEvidence: `${topError.count}x "${topError.pattern}" errors`,
+      description: `Add rule to CLAUDE.md to prevent ${topError.pattern}`,
+      destination: 'CLAUDE.md',
+    });
+  }
 
-  fs.writeFileSync(agentPath, content);
-  return true;
-}
+  return suggestions;
+};
+
+// ============================================================================
+// Main
+// ============================================================================
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const applyMode = args.includes('--apply');
 
-  // Use all sessions for pattern detection and agent suggestions
-  const allSessionsAnalyzer = new SessionAnalyzer({ allSessions: true });
-  const insights = allSessionsAnalyzer.analyze();
+  // Analyze all sessions
+  const analyzer = new SessionAnalyzer({ allSessions: true });
+  const insights = analyzer.analyze();
   const learnings = loadLearnings();
 
-  // Analyze outcomes from previous suggestions
+  // Analyze outcomes
   const newInsights = analyzeOutcomes(learnings, insights);
   if (newInsights.length > 0) {
     learnings.insights.push(...newInsights);
   }
 
-  printMetrics(insights);
-  const suggestions = printSuggestions(insights, learnings);
+  // Print metrics
+  print.printHeader();
+  print.printSummary(insights.projectType, insights.totalEdits, insights.totalReads, insights.sessionDuration);
+  print.printHotFolders(insights.hotFolders);
+  print.printContextLoss(insights.loopPatterns);
+  print.printErrors(insights.commonErrors);
 
-  // Handle --apply flag
-  if (applyMode) {
-    const agentSuggestions = suggestions.filter(s => s.type === 'agent');
-    if (agentSuggestions.length === 0) {
-      console.log(`${c.dim}no agents to create${c.reset}`);
-    } else {
-      console.log(`${c.bold}creating agents${c.reset}`);
-      for (const s of agentSuggestions) {
-        if (createAgent(s)) {
-          console.log(`  ${c.green}✓${c.reset} created ${s.destination}`);
-        }
-      }
-      console.log();
-    }
-  } else if (suggestions.filter(s => s.type === 'agent').length > 0) {
-    console.log(`${c.dim}run with --apply to create suggested agents${c.reset}`);
-    console.log();
+  // Generate and display suggestions
+  const suggestions = generateSuggestions(insights, learnings);
+  const existingAgents = findExistingAgents(insights);
+  const newAgents = suggestions.filter(s => s.type === 'agent');
+  const rules = suggestions.filter(s => s.type === 'rule');
+
+  print.printAgentsHeader();
+
+  if (existingAgents.length > 0) {
+    print.printExistingAgents(existingAgents);
   }
 
-  printLearnings(learnings);
+  if (newAgents.length > 0) {
+    print.printSuggestedAgents(newAgents.map(a => ({ name: a.name, evidence: a.metricEvidence })));
+  }
 
-  // Run self-learning cycle and display report
+  if (existingAgents.length === 0 && newAgents.length === 0) {
+    print.printNoAgents();
+  }
+
+  if (rules.length > 0) {
+    print.printRules(rules.map(r => ({ name: r.name, evidence: r.metricEvidence })));
+  }
+
+  // Handle --apply mode
+  if (applyMode) {
+    if (newAgents.length === 0) {
+      print.printNoAgentsToGenerate();
+    } else {
+      print.printGenerationHeader();
+
+      for (const s of newAgents) {
+        const folderName = s.name.replace('-expert', '');
+        const folderPath = insights.hotFolders.find(f =>
+          f.path.endsWith(folderName) || f.path.includes(`/${folderName}`)
+        )?.path || `src/${folderName}`;
+
+        const hotFiles = insights.loopPatterns
+          .filter(l => l.file.includes(folderName))
+          .slice(0, 5)
+          .map(l => l.file);
+
+        print.printAgentToGenerate({
+          name: s.name,
+          folder: folderPath,
+          evidence: s.metricEvidence,
+          hotFiles,
+          destination: s.destination,
+        });
+      }
+
+      print.printGenerationSteps();
+    }
+  } else if (newAgents.length > 0) {
+    print.printApplyHint();
+  }
+
+  // Print learnings
+  print.printLearnings({
+    effectiveAgents: learnings.patterns.effectiveAgents,
+    insights: learnings.insights,
+  });
+
+  print.printThresholds(learnings.patterns.hotFolderThreshold, learnings.patterns.contextLossThreshold);
+
+  // Run and display learning report
   const learningReport = runLearningCycle(30);
-  console.log(formatLearningReport(learningReport));
+  print.printLearningReport(learningReport);
 
-  // Record new suggestions
+  // Record suggestions
   const today = new Date().toISOString().split('T')[0];
   for (const s of suggestions) {
-    const existing = learnings.suggestions.find(
-      ls => ls.name === s.name && ls.date === today
-    );
+    const existing = learnings.suggestions.find(ls => ls.name === s.name && ls.date === today);
     if (!existing) {
       learnings.suggestions.push({
         date: today,
@@ -265,206 +348,6 @@ async function main(): Promise<void> {
   }
 
   saveLearnings(learnings);
-}
-
-function printMetrics(insights: SessionInsights): void {
-  console.log();
-  console.log(`${c.bold}wink${c.reset} ${c.dim}· session analysis${c.reset}`);
-  console.log();
-
-  // One-line summary
-  console.log(`${c.dim}${insights.projectType}${c.reset} · ${c.green}${insights.totalEdits}${c.reset} edits · ${c.cyan}${insights.totalReads}${c.reset} reads · ${insights.sessionDuration}min`);
-  console.log();
-
-  // Hot folders - compact
-  if (insights.hotFolders.length > 0) {
-    console.log(`${c.bold}hot folders${c.reset}`);
-    for (const folder of insights.hotFolders.slice(0, 4)) {
-      const name = folder.path.split('/').pop() || folder.path;
-      const bar = '█'.repeat(Math.min(20, Math.round(folder.editCount / 5)));
-      console.log(`  ${c.yellow}${bar}${c.reset} ${name} ${c.dim}(${folder.editCount})${c.reset}`);
-    }
-    console.log();
-  }
-
-  // Repeated reads - the key insight
-  const highReads = insights.loopPatterns.filter(l => l.readCount >= 5);
-  if (highReads.length > 0) {
-    console.log(`${c.bold}context loss${c.reset} ${c.dim}(files read 5+ times)${c.reset}`);
-    for (const loop of highReads.slice(0, 5)) {
-      const color = loop.readCount >= 10 ? c.red : c.yellow;
-      console.log(`  ${color}${loop.readCount}x${c.reset} ${loop.fileName}`);
-    }
-    console.log();
-  }
-
-  // Errors if any
-  if (insights.commonErrors.length > 0) {
-    console.log(`${c.bold}errors${c.reset}`);
-    for (const error of insights.commonErrors.slice(0, 3)) {
-      console.log(`  ${c.red}${error.count}x${c.reset} ${error.pattern}`);
-    }
-    console.log();
-  }
-}
-
-// Find existing agents that match hot folders
-function findExistingAgents(insights: SessionInsights): Array<{ name: string; folder: string; editCount: number }> {
-  const existing: Array<{ name: string; folder: string; editCount: number }> = [];
-  const projectRoot = process.cwd();
-
-  for (const folder of insights.hotFolders) {
-    if (folder.path === projectRoot) continue;
-
-    const folderName = folder.path.split('/').pop() || 'core';
-    const agentName = `${folderName}-expert`;
-
-    if (checkArtifactExists('agent', agentName)) {
-      existing.push({ name: agentName, folder: folderName, editCount: folder.editCount });
-    }
-  }
-
-  return existing;
-}
-
-// Generate consolidated artifact suggestions based on metrics
-function generateSuggestions(insights: SessionInsights, learnings: WinkLearnings): ArtifactSuggestion[] {
-  const suggestions: ArtifactSuggestion[] = [];
-  const threshold = learnings.patterns.hotFolderThreshold;
-
-  // Track which folders already have agents suggested (for consolidation)
-  const suggestedFolders = new Set<string>();
-
-  // AGENTS: One consolidated agent per hot folder (combines expert + context keeper)
-  const projectRoot = process.cwd();
-  for (const folder of insights.hotFolders.slice(0, 3)) {
-    if (folder.editCount < threshold) continue;
-
-    // Skip project root folder - agents for root files don't make sense
-    if (folder.path === projectRoot) continue;
-
-    const folderName = folder.path.split('/').pop() || 'core';
-    const agentName = `${folderName}-expert`;
-
-    if (checkArtifactExists('agent', agentName)) continue;
-    if (suggestedFolders.has(folderName)) continue;
-    suggestedFolders.add(folderName);
-
-    // Find related file reads for this folder
-    const relatedReads = insights.loopPatterns.filter(l =>
-      l.file.includes(folder.path) || folder.path.includes(path.dirname(l.file))
-    );
-    const totalReads = relatedReads.reduce((a, b) => a + b.readCount, 0);
-
-    // Build evidence string
-    let evidence = `${folder.editCount} edits in ${folderName}/`;
-    if (totalReads > 0) {
-      evidence += `, ${totalReads} re-reads`;
-      const topFiles = relatedReads.slice(0, 2).map(r => r.fileName).join(', ');
-      if (topFiles) evidence += ` (${topFiles})`;
-    }
-
-    suggestions.push({
-      type: 'agent',
-      name: agentName,
-      metricEvidence: evidence,
-      description: `Expert on ${folderName}/ folder patterns and code`,
-      destination: `.claude/agents/${agentName}.md`,
-    });
-  }
-
-  // RULES: Suggest rules for recurring error patterns
-  const significantErrors = insights.commonErrors.filter(e => e.count >= 3);
-  if (significantErrors.length > 0) {
-    const topError = significantErrors[0];
-    suggestions.push({
-      type: 'rule',
-      name: 'error-prevention',
-      metricEvidence: `${topError.count}x "${topError.pattern}" errors`,
-      description: `Add rule to CLAUDE.md to prevent ${topError.pattern}`,
-      destination: 'CLAUDE.md',
-    });
-  }
-
-  // NOTE: Skills/commands suggestions removed - we can't reliably detect
-  // "verify workflow" patterns from bash command count alone.
-  // Future: analyze actual command content to detect build+test+lint sequences
-
-  return suggestions;
-}
-
-function printSuggestions(insights: SessionInsights, learnings: WinkLearnings): ArtifactSuggestion[] {
-  const suggestions = generateSuggestions(insights, learnings);
-  const existingAgents = findExistingAgents(insights);
-
-  // Group suggestions by type
-  const newAgents = suggestions.filter(s => s.type === 'agent');
-  const rules = suggestions.filter(s => s.type === 'rule');
-
-  console.log(`${c.bold}agents${c.reset}`);
-  console.log();
-
-  // Show existing agents first
-  if (existingAgents.length > 0) {
-    console.log(`  ${c.green}available${c.reset}`);
-    for (const a of existingAgents) {
-      console.log(`    ${c.green}✓${c.reset} ${a.name} ${c.dim}(${a.editCount} edits in ${a.folder}/)${c.reset}`);
-    }
-    console.log();
-  }
-
-  // Show suggested (new) agents
-  if (newAgents.length > 0) {
-    console.log(`  ${c.cyan}suggested${c.reset}`);
-    for (const a of newAgents) {
-      console.log(`    ${c.cyan}+${c.reset} ${a.name}`);
-      console.log(`      ${c.dim}${a.metricEvidence}${c.reset}`);
-    }
-    console.log();
-  }
-
-  // If no agents at all
-  if (existingAgents.length === 0 && newAgents.length === 0) {
-    console.log(`  ${c.dim}none yet - keep coding to generate suggestions${c.reset}`);
-    console.log();
-  }
-
-  // Show rules if any
-  if (rules.length > 0) {
-    console.log(`${c.bold}rules${c.reset}`);
-    console.log();
-    for (const r of rules) {
-      console.log(`  ${c.yellow}+${c.reset} ${r.name}`);
-      console.log(`    ${c.dim}${r.metricEvidence}${c.reset}`);
-    }
-    console.log();
-  }
-
-  return suggestions;
-}
-
-function printLearnings(learnings: WinkLearnings): void {
-  // Show learnings if any
-  const recentInsights = learnings.insights.slice(-3);
-  const effectiveAgents = learnings.patterns.effectiveAgents;
-
-  if (recentInsights.length > 0 || effectiveAgents.length > 0) {
-    console.log(`${c.bold}${c.magenta}learnings${c.reset}`);
-
-    if (effectiveAgents.length > 0) {
-      console.log(`  ${c.green}✓${c.reset} ${c.dim}effective: ${effectiveAgents.join(', ')}${c.reset}`);
-    }
-
-    for (const insight of recentInsights) {
-      console.log(`  ${c.dim}• ${insight}${c.reset}`);
-    }
-    console.log();
-  }
-
-  // Show thresholds being used
-  console.log(`${c.dim}thresholds: ${learnings.patterns.hotFolderThreshold} edits, ${learnings.patterns.contextLossThreshold} reads${c.reset}`);
-  console.log(`${c.dim}ask Claude to create suggested artifacts${c.reset}`);
-  console.log();
 }
 
 main().catch(err => {

@@ -1,39 +1,70 @@
 ---
 name: wink
 description: Analyze session and suggest specialized agents
-argument-hint: "[optional context]"
+argument-hint: "[--apply] [optional context]"
 ---
 
 # Wink - Auto-Generate Agents from Context
 
-Analyzes your session data and suggests specialized agents based on:
-- Hot folders (most edited areas)
-- Common error patterns
-- Frequently read files
-- Project type
+Analyzes session data and suggests specialized agents based on editing patterns.
 
 ## Usage
 
 ```
-/wink                    # Analyze and suggest agents
-/wink "focus on tests"   # Add context to generated agents
+/wink                    # Show metrics and suggestions
+/wink --apply            # Generate agents with rich content (uses LSP)
+/wink "focus on tests"   # Add context to agents
 ```
 
-## What It Does
+## How It Works
 
-1. **Analyzes** session data from the database
-2. **Identifies** patterns (folders, errors, loops)
-3. **Suggests** specialized agents
-4. **Previews** agent content before generation
-
-## Apply Agents
-
-After reviewing the preview, run with `--apply` to generate:
-
-```bash
-bun dist/commands/wink.js --apply
-```
-
-This creates agent files in `.claude/agents/` that Claude Code can use.
+1. Run the metrics script to get hot files and patterns
+2. If `--apply` is passed, YOU (Claude) generate the agent content using LSP to extract real symbols
 
 Run: bun ${PWD}/dist/commands/wink.js $ARGUMENTS
+
+## When --apply is used
+
+After running the script above, if `--apply` was passed, you MUST generate rich agent content:
+
+For each suggested agent, do the following:
+
+1. **Read the hot files** in that folder using your Read tool
+2. **Use LSP** (go-to-definition, find-references) to understand the code structure  
+3. **Extract key information**:
+   - Exported functions/classes/types with their signatures
+   - Key patterns and conventions used
+   - Dependencies and relationships between files
+4. **Write the agent file** to `.claude/agents/{name}.md` with this structure:
+
+```markdown
+---
+name: {folder}-expert
+description: Expert on {folder}/ - knows exports, patterns, conventions
+tools: Read, Grep, Edit, Write
+---
+
+# {Folder} Expert Agent
+
+## Key Files Summary (Generated: {date})
+
+### {file1}.{ext}
+- Exports: {list of exports with signatures}
+- Key patterns: {patterns observed}
+- Depends on: {imports}
+
+### {file2}.{ext}
+...
+
+## Conventions in {folder}/
+
+- {convention 1}
+- {convention 2}
+
+## Common Operations
+
+- To add a new {X}: {steps}
+- To modify {Y}: {steps}
+```
+
+This makes the agent actually useful - it carries real knowledge, not just metadata.

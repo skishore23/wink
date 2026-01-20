@@ -1,9 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { AgentGenerator, AgentSuggestion } from '../core/agentGenerator';
 import { SessionInsights } from '../core/sessionAnalyzer';
+import { resetThreshold } from '../core/thresholdManager';
 
 describe('AgentGenerator', () => {
   const generator = new AgentGenerator();
+
+  beforeEach(() => {
+    // Reset thresholds to defaults to avoid cross-test pollution
+    resetThreshold('folder-expert');
+    resetThreshold('error-fixer');
+    resetThreshold('context-keeper');
+  });
 
   function createMockInsights(overrides: Partial<SessionInsights> = {}): SessionInsights {
     return {
