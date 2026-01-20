@@ -11,7 +11,7 @@
     {
       "name": "wink",
       "version": "1.0.0",
-      "source": "github:skishore23/wink",
+      "source": ".",
       "description": "Enforces verification before stopping, detects loops, tracks evidence"
     }
   ]
