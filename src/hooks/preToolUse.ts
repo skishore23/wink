@@ -12,7 +12,7 @@ import {
 } from '../core/storage';
 import { getConfig } from '../core/config';
 import * as path from 'path';
-import { readStdin } from '../core/utils';
+import { readStdin } from '../core/hookRunner';
 import { SecurityManager } from '../core/security';
 
 interface PreToolUseInput {
@@ -258,6 +258,6 @@ async function captureAgentBaselines(input: PreToolUseInput): Promise<void> {
   }
 }
 
-if (require.main === module) {
-  main();
+if (import.meta.main) {
+  void main();
 }

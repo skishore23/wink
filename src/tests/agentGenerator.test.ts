@@ -22,6 +22,20 @@ describe('AgentGenerator', () => {
       loopPatterns: [],
       qualityHotspots: [],
       failedChecks: [],
+      contextHygiene: {
+        wastedReads: [],
+        deadFiles: [],
+        efficiency: {
+          uniqueFilesRead: 10,
+          uniqueFilesEdited: 5,
+          focusRatio: 0.5,
+          loopCount: 0,
+          searchEfficiency: 1,
+          verificationFailures: 0,
+          score: 70
+        },
+        searchFunnels: []
+      },
       projectType: 'node',
       totalEvents: 100,
       totalEdits: 50,

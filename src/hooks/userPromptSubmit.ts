@@ -3,6 +3,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getDb, getCurrentSessionId, getLastVerifyResult, getQualityEvents } from '../core/storage';
+import { analyzeContextHygiene, formatHygieneWarning } from '../core/contextHygiene';
 
 // Minimal session context - current session only, from database
 
@@ -90,6 +91,13 @@ async function main() {
       }
     }
 
+    // Context hygiene warning (only show if significant waste)
+    const hygiene = analyzeContextHygiene(sessionId);
+    const hygieneWarning = formatHygieneWarning(hygiene);
+    if (hygieneWarning) {
+      console.log(`\x1b[33m${hygieneWarning}\x1b[0m`);
+    }
+
     // Output status line
     if (parts.length > 0) {
       console.log(`\x1b[2m○ wink · ${parts.join(' · ')}\x1b[0m`);
@@ -100,4 +108,4 @@ async function main() {
   }
 }
 
-main();
+void main();

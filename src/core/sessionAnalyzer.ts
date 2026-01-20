@@ -1,5 +1,6 @@
 import { getDb, getCurrentSessionId, getQualityEvents, QualityEvent } from './storage';
 import { ProjectDetector } from './projectDetector';
+import { analyzeContextHygiene, ContextHygieneReport } from './contextHygiene';
 import * as path from 'path';
 
 export interface HotFolder {
@@ -54,11 +55,12 @@ export interface SessionInsights {
   loopPatterns: LoopPattern[];
   qualityHotspots: QualityHotspot[];
   failedChecks: FailedCheckSummary[];
+  contextHygiene: ContextHygieneReport;
   projectType: 'go' | 'node' | 'rust' | 'python' | 'unknown';
   totalEvents: number;
   totalEdits: number;
   totalReads: number;
-  sessionDuration: number; // in minutes
+  sessionDuration: number;
 }
 
 export class SessionAnalyzer {
@@ -88,6 +90,7 @@ export class SessionAnalyzer {
       loopPatterns: this.getLoopPatterns(),
       qualityHotspots: this.getQualityHotspots(),
       failedChecks: this.getFailedChecks(),
+      contextHygiene: analyzeContextHygiene(this.sessionId),
       projectType: this.getProjectType(),
       ...this.getSessionStats()
     };

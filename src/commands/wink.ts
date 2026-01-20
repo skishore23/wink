@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { SessionAnalyzer, SessionInsights } from '../core/sessionAnalyzer';
 import { runLearningCycle } from '../core/learningEngine';
+import { adjustThresholdsForEfficiency } from '../core/thresholdManager';
 import * as print from '../core/printer';
 
 // ============================================================================
@@ -257,6 +258,10 @@ async function main(): Promise<void> {
   print.printHotFolders(insights.hotFolders);
   print.printContextLoss(insights.loopPatterns);
   print.printErrors(insights.commonErrors);
+  print.printContextHygiene(insights.contextHygiene);
+
+  // Adjust thresholds based on efficiency (self-improving)
+  const efficiencyAdjustments = adjustThresholdsForEfficiency(insights.contextHygiene.efficiency.score);
 
   // Generate and display suggestions
   const suggestions = generateSuggestions(insights, learnings);
@@ -325,6 +330,15 @@ async function main(): Promise<void> {
 
   // Run and display learning report
   const learningReport = runLearningCycle(30);
+
+  // Merge efficiency-based adjustments into report
+  if (efficiencyAdjustments.length > 0) {
+    learningReport.thresholdAdjustments.push(...efficiencyAdjustments);
+    learningReport.insights.push(
+      `Adjusted ${efficiencyAdjustments.length} threshold(s) based on efficiency score (${insights.contextHygiene.efficiency.score}/100)`
+    );
+  }
+
   print.printLearningReport(learningReport);
 
   // Record suggestions

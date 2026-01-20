@@ -14,4 +14,4 @@ Display comprehensive metrics for monitoring the effectiveness of Wink:
 - Most edited files
 - Recent gate decisions
 
-Run: bun ${PWD}/dist/commands/metrics.js
+Run: bun ${CLAUDE_PLUGIN_ROOT}/dist/commands/metrics.js

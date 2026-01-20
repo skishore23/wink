@@ -21,7 +21,7 @@ Analyzes session data and suggests specialized agents based on editing patterns.
 1. Run the metrics script to get hot files and patterns
 2. If `--apply` is passed, YOU (Claude) generate the agent content using LSP to extract real symbols
 
-Run: bun ${PWD}/dist/commands/wink.js $ARGUMENTS
+Run: bun ${CLAUDE_PLUGIN_ROOT}/dist/commands/wink.js $ARGUMENTS
 
 ## When --apply is used
 

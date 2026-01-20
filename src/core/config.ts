@@ -8,6 +8,8 @@ export interface Config {
   stopDiscipline: {
     enabled: boolean;
     requireVerify: boolean;
+    onlyAfterEdits: boolean;  // Only enforce verification if edits were made
+    scopeToEditedFiles: boolean;  // Only verify files that were edited
   };
   autoVerify: {
     enabled: boolean;
@@ -46,6 +48,17 @@ export interface Config {
     readThreshold: number;   // Block after N reads of same file
     searchThreshold: number; // Block after N identical searches
   };
+  contextHygiene: {
+    enabled: boolean;
+    warnOnWastedReads: number;  // Warn when N+ files read but not edited
+    warnOnLowEfficiency: number;  // Warn when efficiency below N
+    autoAdjustThresholds: boolean;  // Auto-tune thresholds based on efficiency
+  };
+  agentThresholds: {
+    folderExpert: number;  // Edits needed to suggest folder expert
+    errorFixer: number;    // Error count to suggest error fixer
+    contextKeeper: number; // Read count to suggest context keeper
+  };
   tools: {
     [language: string]: Array<{
       name: string;
@@ -68,7 +81,9 @@ const DEFAULT_CONFIG: Config = {
   mode: 'warn',
   stopDiscipline: {
     enabled: true,
-    requireVerify: true
+    requireVerify: true,
+    onlyAfterEdits: true,  // Don't require verify for pure analysis sessions
+    scopeToEditedFiles: false  // Verify all checks, not just edited files
   },
   autoVerify: {
     enabled: true,
@@ -102,6 +117,17 @@ const DEFAULT_CONFIG: Config = {
     enabled: true,
     readThreshold: 3,    // Block after 3 reads of same file
     searchThreshold: 2   // Block after 2 identical searches
+  },
+  contextHygiene: {
+    enabled: true,
+    warnOnWastedReads: 5,  // Warn when 5+ files read but not edited
+    warnOnLowEfficiency: 40,  // Warn when efficiency below 40
+    autoAdjustThresholds: true  // Auto-tune thresholds based on efficiency
+  },
+  agentThresholds: {
+    folderExpert: 20,  // Edits needed to suggest folder expert
+    errorFixer: 3,     // Error count to suggest error fixer
+    contextKeeper: 5   // Read count to suggest context keeper
   },
   tools: {},
   messages: {

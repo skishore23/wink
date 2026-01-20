@@ -1,5 +1,6 @@
 import { SessionInsights, HotFolder, CommonError, LoopPattern, QualityHotspot, FailedCheckSummary } from './sessionAnalyzer';
 import { getThreshold } from './thresholdManager';
+import { ContextHygieneReport } from './contextHygiene';
 import * as path from 'path';
 
 export interface AgentSuggestion {
@@ -13,17 +14,21 @@ export interface AgentSuggestion {
 export class AgentGenerator {
   generate(insights: SessionInsights, userContext?: string): AgentSuggestion[] {
     const suggestions: AgentSuggestion[] = [];
+    const hygiene = insights.contextHygiene;
+
+    // Efficiency modifier: lower thresholds when efficiency is poor
+    const efficiencyModifier = hygiene.efficiency.score < 50 ? 0.7 : 1.0;
 
     // Rule 1: Hot folder expert
-    const hotFolderAgent = this.suggestHotFolderAgent(insights.hotFolders, insights.projectType);
+    const hotFolderAgent = this.suggestHotFolderAgent(insights.hotFolders, insights.projectType, efficiencyModifier);
     if (hotFolderAgent) suggestions.push(hotFolderAgent);
 
     // Rule 2: Error pattern specialist
-    const errorAgent = this.suggestErrorAgent(insights.commonErrors, insights.projectType);
+    const errorAgent = this.suggestErrorAgent(insights.commonErrors, insights.projectType, efficiencyModifier);
     if (errorAgent) suggestions.push(errorAgent);
 
-    // Rule 3: Context keeper for loop patterns
-    const contextAgent = this.suggestContextAgent(insights.loopPatterns);
+    // Rule 3: Context keeper - enhanced with hygiene data
+    const contextAgent = this.suggestContextAgent(insights.loopPatterns, hygiene, efficiencyModifier);
     if (contextAgent) suggestions.push(contextAgent);
 
     // Rule 4: Language specialist
@@ -48,12 +53,12 @@ export class AgentGenerator {
     return suggestions;
   }
 
-  private suggestHotFolderAgent(folders: HotFolder[], projectType: string): AgentSuggestion | null {
+  private suggestHotFolderAgent(folders: HotFolder[], projectType: string, efficiencyMod = 1.0): AgentSuggestion | null {
     if (folders.length === 0) return null;
 
     const topFolder = folders[0];
-    const threshold = getThreshold('folder-expert');
-    if (topFolder.editCount < threshold) return null; // Not enough activity
+    const threshold = Math.floor(getThreshold('folder-expert') * efficiencyMod);
+    if (topFolder.editCount < threshold) return null;
 
     const folderName = path.basename(topFolder.path);
     const name = `${folderName}-expert`;
@@ -96,12 +101,12 @@ This is a ${projectType} project.
     };
   }
 
-  private suggestErrorAgent(errors: CommonError[], projectType: string): AgentSuggestion | null {
+  private suggestErrorAgent(errors: CommonError[], projectType: string, efficiencyMod = 1.0): AgentSuggestion | null {
     if (errors.length === 0) return null;
 
     const topError = errors[0];
-    const threshold = getThreshold('error-fixer');
-    if (topError.count < threshold) return null; // Not enough errors
+    const threshold = Math.floor(getThreshold('error-fixer') * efficiencyMod);
+    if (topError.count < threshold) return null;
 
     const name = 'error-fixer';
     const errorList = errors.slice(0, 5).map(e => `- ${e.pattern} (${e.count}x)`).join('\n');
@@ -151,16 +156,42 @@ ${this.getQuickFixes(projectType)}
     };
   }
 
-  private suggestContextAgent(loops: LoopPattern[]): AgentSuggestion | null {
-    if (loops.length === 0) return null;
+  private suggestContextAgent(loops: LoopPattern[], hygiene: ContextHygieneReport, efficiencyMod = 1.0): AgentSuggestion | null {
+    // Trigger on loops OR significant wasted reads
+    const hasLoops = loops.length > 0;
+    const hasWastedReads = hygiene.wastedReads.length >= 3;
+
+    if (!hasLoops && !hasWastedReads) return null;
 
     const topLoop = loops[0];
-    const threshold = getThreshold('context-keeper');
-    if (topLoop.readCount < threshold) return null; // Not enough reads
+    const threshold = Math.floor(getThreshold('context-keeper') * efficiencyMod);
+
+    // Check if loops meet threshold
+    const loopsTrigger = topLoop && topLoop.readCount >= threshold;
+    // Or if we have significant context waste
+    const wasteTrigger = hasWastedReads && hygiene.efficiency.score < 60;
+
+    if (!loopsTrigger && !wasteTrigger) return null;
 
     const name = 'context-keeper';
-    const fileList = loops.slice(0, 5).map(l => `- ${l.fileName} (read ${l.readCount}x)`).join('\n');
+
+    // Build file list from both loops and wasted reads
+    const fileList = loops.slice(0, 3).map(l => `- ${l.fileName} (read ${l.readCount}x)`);
+    if (hasWastedReads) {
+      const wastedList = hygiene.wastedReads.slice(0, 2).map(w => `- ${w.file} (read ${w.count}x, unused)`);
+      fileList.push(...wastedList);
+    }
+
     const fullPaths = loops.slice(0, 5).map(l => l.file);
+
+    // Build reason based on trigger
+    let reason = '';
+    if (loopsTrigger) {
+      reason = `${topLoop.fileName} read ${topLoop.readCount}x`;
+    }
+    if (wasteTrigger) {
+      reason += reason ? ` + ${hygiene.wastedReads.length} wasted reads` : `${hygiene.wastedReads.length} wasted reads`;
+    }
 
     const markdown = `---
 name: ${name}
@@ -175,28 +206,30 @@ You maintain knowledge about files that are frequently referenced in this projec
 
 ## Key Files You Track
 
-${fileList}
+${fileList.join('\n')}
 
-## Full Paths
+## Context Hygiene Issue
 
-${fullPaths.map(f => `- ${f}`).join('\n')}
+Session efficiency: ${hygiene.efficiency.score}/100
+${hygiene.wastedReads.length > 0 ? `Wasted reads: ${hygiene.wastedReads.length} files read but never used in edits` : ''}
 
 ## Your Role
 
-1. You remember the contents and structure of these key files
-2. When asked about them, provide accurate information without re-reading
-3. Alert when changes might affect these core files
-4. Use haiku model to save tokens since you're just retrieving cached context
+1. Cache the contents of key files to reduce re-reading
+2. When asked about these files, provide info without re-reading
+3. Alert when reads seem unnecessary
+4. Help improve context efficiency by consolidating knowledge
 
 ## Usage
 
-Call this agent when you need quick context about these files instead of re-reading them.
+Call this agent when you need quick context about files instead of re-reading them.
+This reduces context waste and improves session efficiency.
 `;
 
     return {
       name,
       description: 'Caches context for frequently read files',
-      reason: `${topLoop.fileName} read ${topLoop.readCount}x`,
+      reason,
       focus: fullPaths,
       markdown
     };

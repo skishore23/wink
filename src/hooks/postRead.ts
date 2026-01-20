@@ -10,13 +10,18 @@ import {
 } from './utils';
 import { getDb, getCurrentSessionId, logEvent } from '../core/storage';
 
+interface PostReadInput {
+  tool_name: string;
+  tool_input: Record<string, unknown>;
+}
+
 async function main() {
   await withErrorHandling(async () => {
-    const hookInput = await readHookInput();
+    const hookInput = await readHookInput<PostReadInput>();
     const { tool_name, tool_input } = hookInput;
 
     // Log the read/search event for metrics tracking
-    const filePath = tool_input.file_path || tool_input.path || tool_input.pattern || '';
+    const filePath = String(tool_input.file_path || tool_input.path || tool_input.pattern || '');
     await logEvent({
       tool: tool_name,
       action: undefined,
@@ -36,30 +41,30 @@ async function main() {
 
     // Count reads from database (current session)
     if (['Read', 'View'].includes(tool_name)) {
-      const filePath = tool_input.file_path || tool_input.path || '';
-      if (filePath) {
-        value = filePath;
+      const filePathValue = String(tool_input.file_path || tool_input.path || '');
+      if (filePathValue) {
+        value = filePathValue;
         const result = db.prepare(`
           SELECT COUNT(*) as count FROM events
           WHERE session_id = ?
             AND tool IN ('Read', 'View')
             AND json_extract(input_json, '$.file_path') = ?
-        `).get(sessionId, filePath) as { count: number };
+        `).get(sessionId, filePathValue) as { count: number };
         count = result.count;
         warningThreshold = 3;
       }
     }
     // Count searches from database (current session)
     else if (tool_name === 'Grep') {
-      const pattern = tool_input.pattern || '';
-      if (pattern) {
-        value = pattern;
+      const patternValue = String(tool_input.pattern || '');
+      if (patternValue) {
+        value = patternValue;
         const result = db.prepare(`
           SELECT COUNT(*) as count FROM events
           WHERE session_id = ?
             AND tool = 'Grep'
             AND json_extract(input_json, '$.pattern') = ?
-        `).get(sessionId, pattern) as { count: number };
+        `).get(sessionId, patternValue) as { count: number };
         count = result.count;
         warningThreshold = 2;
       }
@@ -87,4 +92,4 @@ async function main() {
   });
 }
 
-main();
+void main();

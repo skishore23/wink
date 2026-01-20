@@ -9,4 +9,4 @@ Show the current session status including:
 - Evidence collected (files read, searched)
 - Recent events
 
-Run: bun ${PWD}/dist/commands/status.js
+Run: bun ${CLAUDE_PLUGIN_ROOT}/dist/commands/status.js

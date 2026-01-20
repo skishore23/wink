@@ -2,7 +2,9 @@
 // Stop gate - blocks Claude from stopping when verification needed
 
 import { getDb, getCurrentSessionId, getLastVerifyResult, logDecision, updateMetric } from '../core/storage';
-import { readStdin } from '../core/utils';
+import { readStdin } from '../core/hookRunner';
+import { analyzeContextHygiene, formatSessionSummary } from '../core/contextHygiene';
+import { getConfig } from '../core/config';
 import * as path from 'path';
 
 
@@ -33,6 +35,7 @@ async function main() {
 async function stopGate(_input: StopGateInput): Promise<StopGateOutput> {
   const db = getDb();
   const sessionId = getCurrentSessionId();
+  const config = await getConfig();
 
   // Helper to output reason visibly
   const blockWith = (reason: string, instruction: string): StopGateOutput => {
@@ -44,6 +47,27 @@ async function stopGate(_input: StopGateInput): Promise<StopGateOutput> {
   };
 
   try {
+    // Check if any edits were made this session
+    const sessionEdits = db.prepare(`
+      SELECT COUNT(*) as count FROM events
+      WHERE session_id = ? AND tool IN ('Write', 'Edit', 'MultiEdit')
+    `).get(sessionId) as { count: number };
+
+    const hasEdits = sessionEdits.count > 0;
+
+    // If onlyAfterEdits is enabled and no edits were made, allow stop
+    if (config.stopDiscipline.onlyAfterEdits && !hasEdits) {
+      logDecision({ decisionType: 'stop_gate', decision: 'allow', reason: 'no_edits' });
+      updateMetric('stop_allows');
+
+      // Show hygiene summary even for analysis-only sessions
+      const hygiene = analyzeContextHygiene(sessionId);
+      const summary = formatSessionSummary(hygiene);
+      process.stderr.write(`\n\x1b[2m${summary}\x1b[0m\n`);
+
+      return { decision: "approve" };
+    }
+
     // Check 1: Has any verification run this session?
     const verifyCount = db.prepare(`
       SELECT COUNT(*) as count FROM verify_results WHERE session_id = ?
@@ -96,9 +120,14 @@ async function stopGate(_input: StopGateInput): Promise<StopGateOutput> {
       );
     }
 
-    // All checks passed
+    // All checks passed - show session summary
     logDecision({ decisionType: 'stop_gate', decision: 'allow' });
     updateMetric('stop_allows');
+
+    // Display session hygiene summary
+    const hygiene = analyzeContextHygiene(sessionId);
+    const summary = formatSessionSummary(hygiene);
+    process.stderr.write(`\n\x1b[2m${summary}\x1b[0m\n`);
 
     return { decision: "approve" };
 
@@ -107,6 +136,6 @@ async function stopGate(_input: StopGateInput): Promise<StopGateOutput> {
   }
 }
 
-if (require.main === module) {
-  main();
+if (import.meta.main) {
+  void main();
 }

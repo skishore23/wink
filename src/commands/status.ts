@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { getDb, getCurrentSessionId, getSessionConfig } from '../core/storage';
+import { analyzeContextHygiene } from '../core/contextHygiene';
 
 function main() {
   try {
@@ -115,13 +116,32 @@ function main() {
     console.log(`  Total events: ${stats.total_events}`);
     console.log(`  Files read: ${stats.read_count}`);
     console.log(`  Edits made: ${stats.edit_count}`);
-    
+
+    // Context hygiene
+    const hygiene = analyzeContextHygiene(sessionId);
+    console.log('\n🧹 Context Hygiene:');
+    console.log(`  Efficiency: ${hygiene.efficiency.score}/100`);
+    console.log(`  Focus ratio: ${hygiene.efficiency.focusRatio} (${hygiene.efficiency.uniqueFilesRead} read → ${hygiene.efficiency.uniqueFilesEdited} edited)`);
+
+    if (hygiene.efficiency.loopCount > 0) {
+      console.log(`  Loop warnings: ${hygiene.efficiency.loopCount} file${hygiene.efficiency.loopCount > 1 ? 's' : ''} read 3+ times`);
+    }
+
+    if (hygiene.wastedReads.length > 0) {
+      const files = hygiene.wastedReads.slice(0, 3).map(r => r.file).join(', ');
+      console.log(`  Context waste: ${hygiene.wastedReads.length} files read but unused (${files})`);
+    }
+
+    if (hygiene.deadFiles.length > 0) {
+      console.log(`  Dead files: ${hygiene.deadFiles.join(', ')}`);
+    }
+
   } catch (error) {
     console.error('Error:', error);
     process.exit(1);
   }
 }
 
-if (require.main === module) {
+if (import.meta.main) {
   main();
 }

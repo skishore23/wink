@@ -13,7 +13,7 @@ import {
 } from '../core/storage';
 import { detectLoops, shouldWarnAboutLoop } from '../core/loopDetection';
 import { getConfig } from '../core/config';
-import { readStdin } from '../core/utils';
+import { readStdin } from '../core/hookRunner';
 import { colors as c } from './utils';
 import { processError } from '../core/errorLearning';
 
@@ -367,6 +367,6 @@ async function saveAgentSummary(): Promise<void> {
   }
 }
 
-if (require.main === module) {
-  main();
+if (import.meta.main) {
+  void main();
 }

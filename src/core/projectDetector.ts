@@ -1,8 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+export type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun';
+
 export interface IProjectConfig {
   type: 'node' | 'go' | 'python' | 'rust' | 'unknown';
+  packageManager?: PackageManager;
   testCommand?: string;
   lintCommand?: string;
   typecheckCommand?: string;
@@ -12,6 +15,58 @@ export interface IProjectConfig {
   fileExtensions: string[];
 }
 
+/**
+ * Detect the package manager used in a project
+ */
+export function detectPackageManager(projectRoot: string): PackageManager {
+  if (fs.existsSync(path.join(projectRoot, 'bun.lockb'))) {
+    return 'bun';
+  }
+  if (fs.existsSync(path.join(projectRoot, 'pnpm-lock.yaml'))) {
+    return 'pnpm';
+  }
+  if (fs.existsSync(path.join(projectRoot, 'yarn.lock'))) {
+    return 'yarn';
+  }
+  return 'npm';
+}
+
+/**
+ * Get the run command for a package manager
+ */
+export function getRunCommand(pm: PackageManager, script: string): string {
+  switch (pm) {
+    case 'bun': return `bun run ${script}`;
+    case 'pnpm': return `pnpm run ${script}`;
+    case 'yarn': return `yarn ${script}`;
+    default: return `npm run ${script}`;
+  }
+}
+
+/**
+ * Get the test command for a package manager
+ */
+export function getTestCommand(pm: PackageManager): string {
+  switch (pm) {
+    case 'bun': return 'bun test';
+    case 'pnpm': return 'pnpm test';
+    case 'yarn': return 'yarn test';
+    default: return 'npm test';
+  }
+}
+
+/**
+ * Get the audit command for a package manager
+ */
+export function getAuditCommand(pm: PackageManager): string {
+  switch (pm) {
+    case 'bun': return 'bun pm audit';
+    case 'pnpm': return 'pnpm audit';
+    case 'yarn': return 'yarn audit';
+    default: return 'npm audit --audit-level=moderate';
+  }
+}
+
 export class ProjectDetector {
   static detect(projectRoot: string): IProjectConfig {
     // Check for package.json (Node.js/TypeScript)
@@ -19,15 +74,16 @@ export class ProjectDetector {
     if (fs.existsSync(packageJsonPath)) {
       const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
       const scripts = packageJson.scripts || {};
+      const pm = detectPackageManager(projectRoot);
 
-      // Simple: if script exists, use npm run <name>
       return {
         type: 'node',
-        testCommand: scripts.test ? 'npm test' : undefined,
-        lintCommand: scripts.lint ? 'npm run lint' : undefined,
-        typecheckCommand: scripts.build ? 'npm run build' : undefined,
-        buildCommand: scripts.build ? 'npm run build' : undefined,
-        securityCommand: 'npm audit --audit-level=moderate',
+        packageManager: pm,
+        testCommand: scripts.test ? getTestCommand(pm) : undefined,
+        lintCommand: scripts.lint ? getRunCommand(pm, 'lint') : undefined,
+        typecheckCommand: scripts.typecheck ? getRunCommand(pm, 'typecheck') : (scripts.build ? getRunCommand(pm, 'build') : undefined),
+        buildCommand: scripts.build ? getRunCommand(pm, 'build') : undefined,
+        securityCommand: getAuditCommand(pm),
         complexityAnalyzer: 'typescript',
         fileExtensions: ['.ts', '.tsx', '.js', '.jsx']
       };

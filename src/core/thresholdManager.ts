@@ -213,3 +213,63 @@ export function shouldSuggestAgent(
     reason: `metric ${currentMetric} below threshold ${threshold}`
   };
 }
+
+/**
+ * Adjust thresholds based on session efficiency score
+ *
+ * When efficiency is low (lots of wasted reads, loops), we want to:
+ * - Lower thresholds so agents get suggested earlier
+ * - Help break bad patterns before they compound
+ *
+ * When efficiency is high, we can be more conservative.
+ */
+export function adjustThresholdsForEfficiency(efficiencyScore: number): ThresholdAdjustment[] {
+  const adjustments: ThresholdAdjustment[] = [];
+
+  // Only adjust if efficiency is notably poor or good
+  if (efficiencyScore >= 40 && efficiencyScore <= 75) {
+    return adjustments; // Moderate efficiency, no adjustment
+  }
+
+  const agentTypes = ['folder-expert', 'error-fixer', 'context-keeper'];
+
+  for (const agentType of agentTypes) {
+    const current = getAgentThreshold(agentType);
+    let newValue = current.thresholdValue;
+    let reason = '';
+
+    if (efficiencyScore < 40) {
+      // Poor efficiency - lower thresholds to suggest agents earlier
+      newValue = current.thresholdValue * 0.8;
+      reason = `low session efficiency (${efficiencyScore}/100) - suggesting agents earlier`;
+    } else if (efficiencyScore > 75) {
+      // High efficiency - can raise thresholds slightly
+      newValue = current.thresholdValue * 1.1;
+      reason = `high session efficiency (${efficiencyScore}/100) - being more selective`;
+    }
+
+    // Clamp to min/max bounds
+    newValue = Math.max(current.minValue, Math.min(current.maxValue, newValue));
+    newValue = Math.round(newValue * 10) / 10;
+
+    // Only adjust if change is meaningful
+    if (Math.abs(newValue - current.thresholdValue) >= 0.5) {
+      updateAgentThreshold(
+        agentType,
+        newValue,
+        current.effectivenessAvg,
+        current.sampleCount
+      );
+
+      adjustments.push({
+        agentType,
+        oldValue: current.thresholdValue,
+        newValue,
+        reason,
+        effectivenessAvg: current.effectivenessAvg
+      });
+    }
+  }
+
+  return adjustments;
+}

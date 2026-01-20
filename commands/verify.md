@@ -13,4 +13,4 @@ Run all configured verification checks including:
 
 This command will auto-detect verifiers from package.json if not already configured.
 
-Run: bun ${PWD}/dist/commands/verify.js
+Run: bun ${CLAUDE_PLUGIN_ROOT}/dist/commands/verify.js

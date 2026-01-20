@@ -1,6 +1,19 @@
-import { HookInput, HookOutput } from '../types';
 import { getProjectRoot } from '../core/config';
 import { DebugLogger } from '../core/debug';
+
+// Re-export centralized utilities from hookRunner
+export {
+  readStdin,
+  parseStdinAs,
+  runHook,
+  runPreToolUse,
+  runPostToolUse,
+  runStopGate,
+  runUserPromptSubmit,
+  runSessionStart,
+  safeJsonParse,
+  extractErrorFromResponse
+} from '../core/hookRunner';
 
 // Shared ANSI colors - use for stderr output (terminal renders these)
 export const colors = {
@@ -21,7 +34,7 @@ export function extractFilePath(toolName: string, toolInput: Record<string, unkn
   return (toolInput.file_path as string) || (toolInput.path as string) || null;
 }
 
-export async function readHookInput(): Promise<HookInput> {
+export async function readHookInput<T = unknown>(): Promise<T> {
   let input = '';
   process.stdin.setEncoding('utf8');
   for await (const chunk of process.stdin) {
@@ -30,7 +43,7 @@ export async function readHookInput(): Promise<HookInput> {
   return JSON.parse(input);
 }
 
-export function outputHookResult(output: HookOutput): void {
+export function outputHookResult(output: unknown): void {
   console.log(JSON.stringify(output));
 }
 

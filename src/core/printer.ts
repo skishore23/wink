@@ -368,6 +368,71 @@ export function printNoAgentsToGenerate(): void {
   console.log(fmt.muted('no agents to create'));
 }
 
+/**
+ * Print context hygiene metrics
+ */
+export function printContextHygiene(hygiene: {
+  wastedReads: Array<{ file: string; count: number }>;
+  deadFiles: string[];
+  efficiency: {
+    score: number;
+    uniqueFilesRead: number;
+    uniqueFilesEdited: number;
+    focusRatio: number;
+    loopCount: number;
+    searchEfficiency: number;
+  };
+  searchFunnels: Array<{ pattern: string; effectiveness: number }>;
+}): void {
+  printSection('context hygiene');
+  console.log();
+
+  // Efficiency score with visual indicator
+  const score = hygiene.efficiency.score;
+  const scoreColor = score >= 70 ? fmt.success : score >= 50 ? fmt.warning : fmt.error;
+  const scoreBar = progressBar(score, 100, 15);
+  console.log(`  ${scoreColor(scoreBar)} efficiency: ${scoreColor(`${score}/100`)}`);
+
+  // Focus ratio
+  const focus = hygiene.efficiency.focusRatio.toFixed(2);
+  const focusDesc = `${hygiene.efficiency.uniqueFilesRead} read ${icons.arrow} ${hygiene.efficiency.uniqueFilesEdited} edited`;
+  console.log(`  ${fmt.muted('focus:')} ${focus} ${fmt.muted(`(${focusDesc})`)}`);
+
+  // Loops
+  if (hygiene.efficiency.loopCount > 0) {
+    console.log(`  ${fmt.warning(icons.bullet)} ${hygiene.efficiency.loopCount} file${hygiene.efficiency.loopCount > 1 ? 's' : ''} read 3+ times`);
+  }
+
+  // Wasted reads
+  if (hygiene.wastedReads.length > 0) {
+    console.log(`  ${fmt.error(icons.bullet)} ${hygiene.wastedReads.length} files read but never edited`);
+    for (const w of hygiene.wastedReads.slice(0, 3)) {
+      const fileName = w.file.split('/').pop() || w.file;
+      console.log(`    ${fmt.muted(icons.arrow)} ${fileName} ${fmt.muted(`(${w.count}x)`)}`);
+    }
+  }
+
+  // Dead files
+  if (hygiene.deadFiles.length > 0) {
+    console.log(`  ${fmt.error(icons.bullet)} ${hygiene.deadFiles.length} created but never imported`);
+    for (const f of hygiene.deadFiles.slice(0, 2)) {
+      const fileName = f.split('/').pop() || f;
+      console.log(`    ${fmt.muted(icons.arrow)} ${fileName}`);
+    }
+  }
+
+  // Search efficiency
+  if (hygiene.searchFunnels.length > 0) {
+    const effective = hygiene.searchFunnels.filter(s => s.effectiveness > 0).length;
+    const total = hygiene.searchFunnels.length;
+    const pct = Math.round((effective / total) * 100);
+    const searchColor = pct >= 70 ? fmt.success : pct >= 40 ? fmt.warning : fmt.error;
+    console.log(`  ${fmt.muted('search')} ${icons.arrow} ${fmt.muted('edit:')} ${searchColor(`${effective}/${total}`)} ${fmt.muted(`(${pct}%)`)}`);
+  }
+
+  console.log();
+}
+
 // ============================================================================
 // Learning report formatting
 // ============================================================================

@@ -16,4 +16,4 @@ Configurable in `.winkclaude/config.json`:
 }
 ```
 
-Run: bun ${PWD}/dist/commands/test.js
+Run: bun ${CLAUDE_PLUGIN_ROOT}/dist/commands/test.js

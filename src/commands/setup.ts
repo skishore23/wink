@@ -83,7 +83,7 @@ async function main() {
   console.log('  3. Run /status to check current state');
 }
 
-if (require.main === module) {
+if (import.meta.main) {
   main().catch(err => {
     console.error('Setup error:', err);
     process.exit(1);

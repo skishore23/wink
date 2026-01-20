@@ -12,4 +12,4 @@ Initialize Wink in the current project:
 - Detects project type and configures verifiers
 - Creates config file
 
-Run: bun ${PWD}/dist/commands/setup.js
+Run: bun ${CLAUDE_PLUGIN_ROOT}/dist/commands/setup.js

@@ -15,11 +15,11 @@ import { ProjectDetector } from '../core/projectDetector';
 import { ActivityReporter } from '../core/activityReporter';
 import { UserConfigManager } from '../core/userConfig';
 import { logEvent } from '../core/storage';
+import type { VerificationResult } from '../types/hooks';
 
-interface VerificationResult {
-  name: string;
-  passed: boolean;
-  error?: string;
+interface PostEditInput {
+  tool_name: string;
+  tool_input: Record<string, unknown>;
 }
 
 async function runFastVerify(projectRoot: string, editedFile: string): Promise<VerificationResult[]> {
@@ -84,7 +84,7 @@ async function runFastVerify(projectRoot: string, editedFile: string): Promise<V
 
 async function main() {
   await withErrorHandling(async () => {
-    const hookInput = await readHookInput();
+    const hookInput = await readHookInput<PostEditInput>();
     const { tool_name, tool_input } = hookInput;
     
     // Only process write/edit operations
@@ -96,9 +96,9 @@ async function main() {
     // Extract file path
     let filePath: string | undefined;
     if (tool_name === 'MultiEdit' && tool_input.edits) {
-      filePath = tool_input.file_path;
+      filePath = tool_input.file_path as string | undefined;
     } else {
-      filePath = tool_input.file_path || tool_input.path;
+      filePath = (tool_input.file_path || tool_input.path) as string | undefined;
     }
     
     if (!filePath) {
@@ -188,4 +188,4 @@ async function main() {
   });
 }
 
-main();
+void main();

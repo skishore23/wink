@@ -4,7 +4,7 @@
     "UserPromptSubmit": [{
       "hooks": [{
         "type": "command",
-        "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/userPromptSubmit.ts"
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/userPromptSubmit.js"
       }]
     }],
 
@@ -13,28 +13,28 @@
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [{
           "type": "command",
-          "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/preToolUse.ts"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/preToolUse.js"
         }]
       },
       {
         "matcher": "Read|View",
         "hooks": [{
           "type": "command",
-          "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/preToolUse.ts"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/preToolUse.js"
         }]
       },
       {
-        "matcher": "Grep",
+        "matcher": "Grep|Glob",
         "hooks": [{
           "type": "command",
-          "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/preToolUse.ts"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/preToolUse.js"
         }]
       },
       {
         "matcher": "Task",
         "hooks": [{
           "type": "command",
-          "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/preToolUse.ts"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/preToolUse.js"
         }]
       }
     ],
@@ -44,21 +44,21 @@
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [{
           "type": "command",
-          "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/postEdit.ts"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/postEdit.js"
         }]
       },
       {
         "matcher": "Read|View|Grep|Glob",
         "hooks": [{
           "type": "command",
-          "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/postRead.ts"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/postRead.js"
         }]
       },
       {
-        "matcher": ".*",
+        "matcher": "Bash|Task|WebFetch|WebSearch|Skill|TodoWrite|AskUserQuestion|EnterPlanMode|ExitPlanMode|NotebookEdit|KillShell|TaskOutput",
         "hooks": [{
           "type": "command",
-          "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/postToolUse.ts"
+          "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/postToolUse.js"
         }]
       }
     ],
@@ -66,21 +66,21 @@
     "Stop": [{
       "hooks": [{
         "type": "command",
-        "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/stopGate.ts"
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/stopGate.js"
       }]
     }],
 
     "SubagentStop": [{
       "hooks": [{
         "type": "command",
-        "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/stopGate.ts"
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/stopGate.js"
       }]
     }],
 
     "SessionStart": [{
       "hooks": [{
         "type": "command",
-        "command": "bun ${CLAUDE_PLUGIN_ROOT}/src/hooks/sessionStart.ts"
+        "command": "bun ${CLAUDE_PLUGIN_ROOT}/dist/hooks/sessionStart.js"
       }]
     }]
   }
