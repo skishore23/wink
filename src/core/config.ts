@@ -23,11 +23,6 @@ export interface Config {
     build?: string;
     security?: string;
   };
-  evidenceDecay: {
-    enabled: boolean;
-    freshMinutes: number;
-    expireMinutes: number;
-  };
   verifyTimeout: number;
   fastVerifyTimeout: number;
   feedback: {
@@ -92,11 +87,6 @@ const DEFAULT_CONFIG: Config = {
   },
   verifiers: {
     // Will be auto-detected or user-configured
-  },
-  evidenceDecay: {
-    enabled: false,
-    freshMinutes: 5,
-    expireMinutes: 15
   },
   verifyTimeout: 120,
   fastVerifyTimeout: 30,
