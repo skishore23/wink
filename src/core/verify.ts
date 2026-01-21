@@ -16,13 +16,13 @@ export interface CheckResult {
 }
 
 /**
- * Build a targeted command that only checks specific files
- * Returns null if targeting isn't possible for this command
+ * Build a targeted lint command for specific files
+ * Tests are left to Claude to scope intelligently based on context
  */
-function buildTargetedCommand(name: string, baseCommand: string, changedFiles: string[]): string | null {
+function buildTargetedLintCommand(baseCommand: string, changedFiles: string[]): string | null {
   if (changedFiles.length === 0) return null;
 
-  // Filter to only source files (not config, json, etc.)
+  // Filter to only source files
   const sourceFiles = changedFiles.filter(f =>
     f.endsWith('.ts') || f.endsWith('.tsx') ||
     f.endsWith('.js') || f.endsWith('.jsx') ||
@@ -31,36 +31,19 @@ function buildTargetedCommand(name: string, baseCommand: string, changedFiles: s
 
   if (sourceFiles.length === 0) return null;
 
-  // Lint: most linters accept file paths
-  if (name === 'lint') {
-    // ESLint: bunx eslint file1.ts file2.ts
-    if (baseCommand.includes('eslint') || baseCommand.includes('bun run lint')) {
-      const files = sourceFiles.join(' ');
-      return `bunx eslint ${files}`;
-    }
-    // golangci-lint: golangci-lint run file1.go file2.go
-    if (baseCommand.includes('golangci-lint')) {
-      const goFiles = sourceFiles.filter(f => f.endsWith('.go')).join(' ');
-      return goFiles ? `golangci-lint run ${goFiles}` : null;
-    }
-    // ruff: ruff check file1.py file2.py
-    if (baseCommand.includes('ruff')) {
-      const pyFiles = sourceFiles.filter(f => f.endsWith('.py')).join(' ');
-      return pyFiles ? `ruff check ${pyFiles}` : null;
-    }
+  // ESLint
+  if (baseCommand.includes('eslint') || baseCommand.includes('bun run lint')) {
+    return `bunx eslint ${sourceFiles.join(' ')}`;
   }
-
-  // Test: try to find related test files
-  if (name === 'test') {
-    // For now, run full tests - finding related tests is complex
-    // Future: could use jest --findRelatedTests or similar
-    return null;
+  // golangci-lint
+  if (baseCommand.includes('golangci-lint')) {
+    const goFiles = sourceFiles.filter(f => f.endsWith('.go')).join(' ');
+    return goFiles ? `golangci-lint run ${goFiles}` : null;
   }
-
-  // Typecheck: needs full project context
-  // TypeScript needs all files to check types correctly
-  if (name === 'typecheck' || name === 'build') {
-    return null;
+  // ruff
+  if (baseCommand.includes('ruff')) {
+    const pyFiles = sourceFiles.filter(f => f.endsWith('.py')).join(' ');
+    return pyFiles ? `ruff check ${pyFiles}` : null;
   }
 
   return null;
@@ -85,28 +68,29 @@ export async function runVerification(mode: 'full' | 'fast' = 'full'): Promise<V
     if (config.verifiers.lint) {
       // Try targeted lint on changed files only
       const targetedCmd = hasChangedFiles
-        ? buildTargetedCommand('lint', config.verifiers.lint, changedFiles)
+        ? buildTargetedLintCommand(config.verifiers.lint, changedFiles)
         : null;
       const cmd = targetedCmd || config.verifiers.lint;
       const label = targetedCmd ? `lint (${changedFiles.length} files)` : undefined;
       checks.push(await runCheck('lint', cmd, config.fastVerifyTimeout, label));
     }
   } else {
-    // Full mode: run all checks, but target lint to changed files
+    // Full mode: run all checks, target lint to changed files
+    // Tests run full suite - Claude can run targeted tests separately if needed
     for (const [name, command] of Object.entries(config.verifiers)) {
       if (!command) continue;
 
-      // Try to target lint to changed files
-      if (name === 'lint' && hasChangedFiles) {
-        const targetedCmd = buildTargetedCommand('lint', command, changedFiles);
+      // Only lint gets auto-scoped, tests are left for Claude to handle intelligently
+      if (name === 'lint' && hasChangedFiles && config.features.fileSpecificChecks) {
+        const targetedCmd = buildTargetedLintCommand(command, changedFiles);
         if (targetedCmd) {
           const label = `lint (${changedFiles.length} files)`;
-          checks.push(await runCheck('lint', targetedCmd, config.verifyTimeout, label));
+          checks.push(await runCheck(name, targetedCmd, config.verifyTimeout, label));
           continue;
         }
       }
 
-      // Run full command for other checks
+      // Run full command for tests, typecheck, build, etc.
       checks.push(await runCheck(name, command, config.verifyTimeout));
     }
   }

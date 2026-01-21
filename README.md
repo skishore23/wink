@@ -40,15 +40,15 @@ Unlike static tools, Wink **gets smarter over time** by learning from actual cod
 
 ## Quick Start
 
-### Installation
+### 1. Install
 
-**Option 1: Claude Code Plugin** (Recommended)
+**Option A: Claude Code Plugin** (Recommended)
 ```
 /plugin marketplace add skishore23/wink
 /plugin install wink@wink
 ```
 
-**Option 2: Manual**
+**Option B: Manual**
 ```bash
 git clone https://github.com/skishore23/wink.git
 cd wink && bun install && bun run build
@@ -61,12 +61,72 @@ Add to `~/.claude/settings.local.json`:
 }
 ```
 
-### Verify It's Working
+### 2. Run Setup
+
+```
+/setup
+```
+
+This will:
+- Create `.wink/` directory and database
+- **Auto-detect your project type** (Node, Go, Rust, Python)
+- **Auto-detect verification commands** from `package.json` scripts
+- Show what was configured
+
+Example output:
+```
+🔧 Wink Setup
+
+✅ Created .wink/ directory
+✅ Created session.db database
+✅ Started new session: abc123...
+
+📦 Detected project type: node
+
+🔍 Verifiers:
+  Typecheck: bun run typecheck
+  Lint: bun run lint
+  Test: bun test
+
+✅ Setup complete!
+```
+
+### 3. Test Verification
+
+```
+/verify
+```
+
+This runs your configured checks. Lint is auto-scoped to edited files. For tests, Claude will intelligently decide whether to run the full suite or target specific tests based on what you changed.
+
+If verifiers weren't auto-detected, edit `.wink/config.json`:
+```json
+{
+  "verifiers": {
+    "typecheck": "npm run typecheck",
+    "lint": "npm run lint",
+    "test": "npm test"
+  }
+}
+```
+
+### 4. Add to .gitignore
+
+Add to your project's `.gitignore`:
+```
+.wink/
+```
+
+The `.wink/` directory contains local session data that shouldn't be committed.
+
+### 5. Confirm It's Working
 
 Look for this in your prompt responses:
 ```
 ○ wink · ✓ verified
 ```
+
+Now Wink is tracking your session and enforcing verification!
 
 ---
 
@@ -296,6 +356,7 @@ Create `.wink/config.json` or run `/setup`:
 |--------|---------|-------------|
 | `mode` | `warn` | `warn`, `block`, or `off` |
 | `stopDiscipline.onlyAfterEdits` | `true` | Skip verification for analysis-only sessions |
+| `features.fileSpecificChecks` | `true` | Scope lint to edited files only |
 | `contextHygiene.autoAdjustThresholds` | `true` | Auto-tune thresholds based on efficiency |
 | `agentThresholds.folderExpert` | `20` | Edits needed to suggest folder expert |
 
@@ -310,7 +371,7 @@ Wink works with any language:
 - **Rust** - Detects `Cargo.toml`, uses `cargo build`, `cargo test`
 - **Python** - Detects `requirements.txt`/`pyproject.toml`, uses `pytest`
 
-Metric collection is language-agnostic (file paths and counts). Claude uses LSP for language-specific symbol extraction.
+Metric collection is language-agnostic (file paths and counts). Configure verifiers in `.wink/config.json` for any stack.
 
 ---
 

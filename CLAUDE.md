@@ -22,18 +22,21 @@ bun run lint      # Lint code
 
 ## Architecture
 
-- **src/hooks/** - Claude Code hook implementations
-- **src/core/** - Storage, session tracking, loop detection
-- **src/commands/** - Slash command implementations
-- **.claude/** - Commands, skills, agents definitions
-- **.wink/** - Runtime data (config, database, learnings)
+- **src/hooks/** - Claude Code hook implementations (postEdit, postRead, preToolUse, stopGate, etc.)
+- **src/core/** - Storage, session tracking, context hygiene, threshold management
+- **src/commands/** - Slash command implementations (verify, wink, status, metrics, setup, test)
+- **src/skills/** - Skill definitions for /wink, /verify, etc.
+- **hooks/hooks.json** - Hook configuration and matchers
+- **.claude-plugin/** - Plugin metadata (plugin.json, marketplace.json)
+- **.wink/** - Runtime data (config.json, session.db, learnings)
 
 ## Hook Flow
 
-1. **UserPromptSubmit** - Injects session context at prompt start
-2. **PreToolUse** - Checks evidence before edits
-3. **PostToolUse** - Logs events, runs verification after edits
-4. **Stop** - Blocks stopping if unverified edits exist
+1. **SessionStart** - Initializes session tracking in database
+2. **UserPromptSubmit** - Shows verification status (✓ verified / ✗ failing)
+3. **PreToolUse** - Loop detection, evidence checks, security validation
+4. **PostToolUse** - Logs events for metrics (reads, edits, searches)
+5. **Stop** - Blocks stopping if unverified edits exist, shows session summary
 
 ## When Stop is Blocked
 
