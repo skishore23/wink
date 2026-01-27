@@ -147,6 +147,7 @@ async function main(): Promise<void> {
   print.printHotFolders(insights.hotFolders);
   print.printContextLoss(insights.loopPatterns);
   print.printErrors(insights.commonErrors);
+  print.printCommandPatterns(insights.commandPatterns);
   print.printContextHygiene(insights.contextHygiene);
 
   // Generate and display suggestions

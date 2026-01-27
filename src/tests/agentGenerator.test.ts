@@ -15,6 +15,7 @@ describe('AgentGenerator', () => {
       toolFrequency: [],
       fileTypes: [],
       loopPatterns: [],
+      commandPatterns: [],
       qualityHotspots: [],
       failedChecks: [],
       contextHygiene: {

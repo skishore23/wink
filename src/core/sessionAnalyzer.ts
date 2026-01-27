@@ -34,6 +34,12 @@ export interface LoopPattern {
   fileName: string;
 }
 
+export interface CommandPattern {
+  command: string;
+  count: number;
+  lastUsed: number;
+}
+
 export interface QualityHotspot {
   target: string;
   count: number;
@@ -53,6 +59,7 @@ export interface SessionInsights {
   toolFrequency: ToolUsage[];
   fileTypes: FileTypeStats[];
   loopPatterns: LoopPattern[];
+  commandPatterns: CommandPattern[];
   qualityHotspots: QualityHotspot[];
   failedChecks: FailedCheckSummary[];
   contextHygiene: ContextHygieneReport;
@@ -88,6 +95,7 @@ export class SessionAnalyzer {
       toolFrequency: this.getToolFrequency(),
       fileTypes: this.getFileTypes(),
       loopPatterns: this.getLoopPatterns(),
+      commandPatterns: this.getCommandPatterns(),
       qualityHotspots: this.getQualityHotspots(),
       failedChecks: this.getFailedChecks(),
       contextHygiene: analyzeContextHygiene(this.sessionId),
@@ -298,6 +306,63 @@ export class SessionAnalyzer {
       readCount: row.read_count,
       fileName: path.basename(row.file_path)
     }));
+  }
+
+  private getCommandPatterns(): CommandPattern[] {
+    const sessionClause = this.allSessions ? '' : 'AND session_id = ?';
+    const params = this.allSessions ? [] : [this.sessionId];
+
+    const results = this.db.prepare(`
+      SELECT
+        json_extract(input_json, '$.command') as command,
+        COUNT(*) as count,
+        MAX(timestamp) as last_used
+      FROM events
+      WHERE tool = 'Bash'
+        AND json_extract(input_json, '$.command') IS NOT NULL
+        ${sessionClause}
+      GROUP BY command
+      HAVING count >= 2
+      ORDER BY count DESC
+      LIMIT 20
+    `).all(...params) as Array<{ command: string; count: number; last_used: number }>;
+
+    // Normalize commands to find patterns
+    const patternMap = new Map<string, { count: number; lastUsed: number; examples: string[] }>();
+
+    for (const row of results) {
+      const pattern = this.normalizeCommand(row.command);
+      const existing = patternMap.get(pattern) || { count: 0, lastUsed: 0, examples: [] };
+      existing.count += row.count;
+      existing.lastUsed = Math.max(existing.lastUsed, row.last_used);
+      if (existing.examples.length < 3) {
+        existing.examples.push(row.command);
+      }
+      patternMap.set(pattern, existing);
+    }
+
+    return Array.from(patternMap.entries())
+      .map(([command, data]) => ({
+        command,
+        count: data.count,
+        lastUsed: data.lastUsed
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }
+
+  private normalizeCommand(cmd: string): string {
+    // Normalize commands to group similar patterns
+    // Keep common shell patterns readable
+    return cmd
+      .replace(/\s+2>&1/g, '')           // Remove common redirect
+      .replace(/\s+\| tail -\d+/g, '')   // Remove tail pipes
+      .replace(/\s+\| head -\d+/g, '')   // Remove head pipes
+      .replace(/\/Users\/[^\s]+/g, '<path>') // Replace user paths only
+      .replace(/[a-f0-9]{8,}/gi, '<id>') // Replace hashes/IDs
+      .replace(/\s+/g, ' ')              // Normalize whitespace
+      .trim()
+      .slice(0, 50);                     // Limit length
   }
 
   private getQualityFailures(): QualityEvent[] {

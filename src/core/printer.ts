@@ -216,11 +216,27 @@ export function printContextLoss(patterns: Array<{ fileName: string; readCount: 
  */
 export function printErrors(errors: Array<{ pattern: string; count: number }>): void {
   if (errors.length === 0) return;
-  
+
   printSection('errors');
-  
+
   for (const error of errors.slice(0, 3)) {
     console.log(`  ${fmt.error(`${error.count}x`)} ${error.pattern}`);
+  }
+  console.log();
+}
+
+/**
+ * Print command patterns for skill suggestions
+ */
+export function printCommandPatterns(patterns: Array<{ command: string; count: number }>): void {
+  // Only show patterns that appear 3+ times (worth automating)
+  const significant = patterns.filter(p => p.count >= 3);
+  if (significant.length === 0) return;
+
+  printSection('repetitive commands');
+
+  for (const pattern of significant.slice(0, 5)) {
+    console.log(`  ${fmt.accent(`${pattern.count}x`)} ${pattern.command}`);
   }
   console.log();
 }
@@ -273,13 +289,30 @@ export function printNoAgents(): void {
  */
 export function printRules(rules: Array<{ name: string; evidence: string }>): void {
   if (rules.length === 0) return;
-  
+
   printSection('rules');
   console.log();
-  
+
   for (const r of rules) {
     console.log(`  ${fmt.warning(icons.plus)} ${r.name}`);
     console.log(`    ${fmt.muted(r.evidence)}`);
+  }
+  console.log();
+}
+
+/**
+ * Print skill suggestions
+ */
+export function printSuggestedSkills(skills: Array<{ name: string; evidence: string }>): void {
+  if (skills.length === 0) return;
+
+  printSection('skills');
+  console.log();
+
+  console.log(`  ${fmt.accent('suggested')}`);
+  for (const s of skills) {
+    console.log(`    ${fmt.accent(icons.plus)} ${s.name}`);
+    console.log(`      ${fmt.muted(s.evidence)}`);
   }
   console.log();
 }

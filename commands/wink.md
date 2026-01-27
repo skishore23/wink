@@ -1,12 +1,12 @@
 ---
 name: wink
-description: Analyze session and suggest specialized agents
+description: Analyze session and suggest agents/skills
 argument-hint: "[--apply] [optional context]"
 ---
 
-# Wink - Session Analysis & Agent Generation
+# Wink - Session Analysis & Artifact Generation
 
-Analyzes session data and suggests specialized agents based on editing patterns.
+Analyzes session data and suggests specialized agents and skills based on editing patterns and command usage.
 
 ## Usage
 
@@ -20,9 +20,9 @@ Run: bun ${CLAUDE_PLUGIN_ROOT}/dist/commands/wink.js $ARGUMENTS
 
 ## When --apply is used
 
-After running the script above, if `--apply` was passed and agents are suggested, generate them:
+After running the script above, if `--apply` was passed and artifacts are suggested, generate them:
 
-For each suggested agent:
+### For each suggested agent:
 
 1. **Read the hot files** listed in the output using your Read tool
 2. **Analyze the code** to understand:
@@ -70,3 +70,31 @@ Expert on `{folder}/` - [brief description of what this folder contains].
 ```
 
 The agent carries real knowledge extracted from the codebase, making it useful for future work in that folder.
+
+### For each suggested skill:
+
+1. **Understand the repetitive pattern** from the command shown
+2. **Create a skill file** at `commands/{name}.md`
+
+### Skill File Format
+
+```markdown
+---
+name: {skill-name}
+description: {what this skill automates}
+argument-hint: "[optional args]"
+---
+
+# {Skill Name}
+
+{Description of what this skill does}
+
+Run: {the command(s) to execute}
+
+## When to Use
+
+- {scenario 1}
+- {scenario 2}
+```
+
+Skills automate repetitive workflows that you've observed in the session.
