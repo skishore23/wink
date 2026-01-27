@@ -135,23 +135,44 @@ const DEFAULT_CONFIG: Config = {
 
 let cachedConfig: Config | null = null;
 
+// Deep merge - nested objects are merged, not replaced
+function mergeConfig(defaults: Config, overrides: Partial<Config>): Config {
+  const result = { ...defaults } as Record<string, unknown>;
+
+  for (const key of Object.keys(overrides) as Array<keyof Config>) {
+    const override = overrides[key];
+    const defaultVal = defaults[key];
+
+    if (override === undefined) continue;
+
+    const isObject = (v: unknown): v is Record<string, unknown> =>
+      v !== null && typeof v === 'object' && !Array.isArray(v);
+
+    result[key] = isObject(override) && isObject(defaultVal)
+      ? { ...defaultVal, ...override }
+      : override;
+  }
+
+  return result as unknown as Config;
+}
+
 export async function getConfig(): Promise<Config> {
   if (cachedConfig) return cachedConfig;
-  
+
   const configPath = path.join(process.cwd(), '.wink', 'config.json');
-  
+
   try {
     if (fs.existsSync(configPath)) {
       const content = fs.readFileSync(configPath, 'utf8');
       const userConfig = JSON.parse(content);
-      cachedConfig = { ...DEFAULT_CONFIG, ...userConfig };
+      // Merge for forward compatibility (old configs + new defaults)
+      cachedConfig = mergeConfig(DEFAULT_CONFIG, userConfig);
     } else {
-      // Create default config
-      cachedConfig = { ...DEFAULT_CONFIG };
-      await saveConfig(cachedConfig);
+      // No config file? Just use defaults. Don't auto-create.
+      cachedConfig = DEFAULT_CONFIG;
     }
-  } catch (error) {
-    console.error('Error loading config:', error);
+  } catch {
+    // Parse error? Use defaults.
     cachedConfig = { ...DEFAULT_CONFIG };
   }
   
