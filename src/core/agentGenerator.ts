@@ -1,5 +1,5 @@
 import { SessionInsights, HotFolder, CommonError, LoopPattern, QualityHotspot, FailedCheckSummary } from './sessionAnalyzer';
-import { getThreshold } from './thresholdManager';
+import { getThresholdSync } from './thresholdManager';
 import { ContextHygieneReport } from './contextHygiene';
 import * as path from 'path';
 
@@ -16,19 +16,16 @@ export class AgentGenerator {
     const suggestions: AgentSuggestion[] = [];
     const hygiene = insights.contextHygiene;
 
-    // Efficiency modifier: lower thresholds when efficiency is poor
-    const efficiencyModifier = hygiene.efficiency.score < 50 ? 0.7 : 1.0;
-
     // Rule 1: Hot folder expert
-    const hotFolderAgent = this.suggestHotFolderAgent(insights.hotFolders, insights.projectType, efficiencyModifier);
+    const hotFolderAgent = this.suggestHotFolderAgent(insights.hotFolders, insights.projectType);
     if (hotFolderAgent) suggestions.push(hotFolderAgent);
 
     // Rule 2: Error pattern specialist
-    const errorAgent = this.suggestErrorAgent(insights.commonErrors, insights.projectType, efficiencyModifier);
+    const errorAgent = this.suggestErrorAgent(insights.commonErrors, insights.projectType);
     if (errorAgent) suggestions.push(errorAgent);
 
-    // Rule 3: Context keeper - enhanced with hygiene data
-    const contextAgent = this.suggestContextAgent(insights.loopPatterns, hygiene, efficiencyModifier);
+    // Rule 3: Context keeper
+    const contextAgent = this.suggestContextAgent(insights.loopPatterns, hygiene);
     if (contextAgent) suggestions.push(contextAgent);
 
     // Rule 4: Language specialist
@@ -53,19 +50,19 @@ export class AgentGenerator {
     return suggestions;
   }
 
-  private suggestHotFolderAgent(folders: HotFolder[], projectType: string, efficiencyMod = 1.0): AgentSuggestion | null {
+  private suggestHotFolderAgent(folders: HotFolder[], projectType: string): AgentSuggestion | null {
     if (folders.length === 0) return null;
 
     const topFolder = folders[0];
-    const threshold = Math.floor(getThreshold('folder-expert') * efficiencyMod);
+    const threshold = getThresholdSync('folder-expert');
     if (topFolder.editCount < threshold) return null;
 
     const folderName = path.basename(topFolder.path);
     const name = `${folderName}-expert`;
-
     const topFolders = folders.slice(0, 3);
     const folderList = topFolders.map(f => `- ${f.path} (${f.editCount} edits)`).join('\n');
 
+    // Simple template - Claude will enrich this when /wink --apply runs
     const markdown = `---
 name: ${name}
 description: Expert on ${folderName}/ folder patterns and code
@@ -74,21 +71,14 @@ tools: Read, Grep, Edit, Write
 
 # ${this.capitalize(folderName)} Expert Agent
 
-You are a specialized agent with deep knowledge of the \`${folderName}/\` directory.
+Expert on \`${folderName}/\` - knows the patterns, conventions, and code structure.
 
-## Your Expertise
+## Hot Folders
 
-You understand the patterns, conventions, and code structure in these folders:
 ${folderList}
 
-## How to Use Your Knowledge
-
-1. When asked about code in these folders, provide specific file references
-2. Understand the relationships between files in this area
-3. Know the common patterns and idioms used here
-4. Can suggest edits that follow existing conventions
-
 ## Project Type
+
 This is a ${projectType} project.
 `;
 
@@ -101,11 +91,11 @@ This is a ${projectType} project.
     };
   }
 
-  private suggestErrorAgent(errors: CommonError[], projectType: string, efficiencyMod = 1.0): AgentSuggestion | null {
+  private suggestErrorAgent(errors: CommonError[], projectType: string): AgentSuggestion | null {
     if (errors.length === 0) return null;
 
     const topError = errors[0];
-    const threshold = Math.floor(getThreshold('error-fixer') * efficiencyMod);
+    const threshold = getThresholdSync('error-fixer');
     if (topError.count < threshold) return null;
 
     const name = 'error-fixer';
@@ -139,12 +129,7 @@ ${examples}
 1. Identify the root cause of the error
 2. Check for similar patterns elsewhere in the codebase
 3. Apply fixes that match the project's style
-4. Run verification after fixes: Use the project's test/lint commands
-
-## Quick Fixes
-
-For ${projectType} projects:
-${this.getQuickFixes(projectType)}
+4. Run verification after fixes: Use \`/verify\`
 `;
 
     return {
@@ -156,7 +141,7 @@ ${this.getQuickFixes(projectType)}
     };
   }
 
-  private suggestContextAgent(loops: LoopPattern[], hygiene: ContextHygieneReport, efficiencyMod = 1.0): AgentSuggestion | null {
+  private suggestContextAgent(loops: LoopPattern[], hygiene: ContextHygieneReport): AgentSuggestion | null {
     // Trigger on loops OR significant wasted reads
     const hasLoops = loops.length > 0;
     const hasWastedReads = hygiene.wastedReads.length >= 3;
@@ -164,7 +149,7 @@ ${this.getQuickFixes(projectType)}
     if (!hasLoops && !hasWastedReads) return null;
 
     const topLoop = loops[0];
-    const threshold = Math.floor(getThreshold('context-keeper') * efficiencyMod);
+    const threshold = getThresholdSync('context-keeper');
 
     // Check if loops meet threshold
     const loopsTrigger = topLoop && topLoop.readCount >= threshold;
@@ -241,47 +226,46 @@ This reduces context waste and improves session efficiency.
   ): AgentSuggestion | null {
     if (projectType === 'unknown') return null;
 
-    const langConfig = this.getLanguageConfig(projectType);
-    const name = `${projectType}-specialist`;
+    const langNames: Record<string, string> = {
+      go: 'Go',
+      node: 'Node.js/TypeScript',
+      rust: 'Rust',
+      python: 'Python'
+    };
 
+    const name = `${projectType}-specialist`;
+    const langName = langNames[projectType] || projectType;
+
+    // Simple template - commands come from config, Claude generates best practices
     const markdown = `---
 name: ${name}
-description: ${langConfig.description}
+description: ${langName} development specialist
 tools: Read, Grep, Edit, Bash
 ---
 
-# ${langConfig.title} Specialist Agent
+# ${langName} Specialist Agent
 
-You are an expert in ${langConfig.language} development for this project.
+Expert in ${langName} development for this project.
 
-## Commands You Know
+## Project Type
 
-- **Build**: \`${langConfig.buildCmd}\`
-- **Test**: \`${langConfig.testCmd}\`
-- **Lint**: \`${langConfig.lintCmd}\`
-- **Type Check**: \`${langConfig.checkCmd}\`
+${projectType}
 
-## Best Practices
+## File Activity
 
-${langConfig.bestPractices.map(p => `- ${p}`).join('\n')}
-
-## Common Patterns in This Project
-
-Based on file activity:
 ${fileTypes.slice(0, 5).map(f => `- ${f.ext}: ${f.editCount} edits`).join('\n')}
 
-## Your Approach
+## Note
 
-1. Follow ${langConfig.language} idioms and conventions
-2. Run appropriate checks after changes
-3. Keep code consistent with project style
+Commands are configured in \`.wink/config.json\` verifiers.
+Run \`/verify\` to execute configured checks.
 `;
 
     return {
       name,
-      description: langConfig.description,
+      description: `${langName} development specialist`,
       reason: `Project detected as ${projectType}`,
-      focus: [langConfig.language, 'best practices'],
+      focus: [langName],
       markdown
     };
   }
@@ -372,105 +356,6 @@ ${regressionList}
       focus: regressions.map(r => r.name),
       markdown
     };
-  }
-
-  private getLanguageConfig(projectType: string) {
-    const configs: Record<string, {
-      title: string;
-      language: string;
-      description: string;
-      buildCmd: string;
-      testCmd: string;
-      lintCmd: string;
-      checkCmd: string;
-      bestPractices: string[];
-    }> = {
-      go: {
-        title: 'Go',
-        language: 'Go',
-        description: 'Go development specialist',
-        buildCmd: 'go build ./...',
-        testCmd: 'go test ./...',
-        lintCmd: 'golangci-lint run',
-        checkCmd: 'go vet ./...',
-        bestPractices: [
-          'Use interfaces for abstraction',
-          'Handle errors explicitly',
-          'Keep functions small and focused',
-          'Use table-driven tests',
-          'Avoid global state'
-        ]
-      },
-      node: {
-        title: 'Node.js/TypeScript',
-        language: 'TypeScript',
-        description: 'TypeScript development specialist',
-        buildCmd: 'bun run build',
-        testCmd: 'bun test',
-        lintCmd: 'bun run lint',
-        checkCmd: 'bun run typecheck',
-        bestPractices: [
-          'Use strict TypeScript settings',
-          'Prefer interfaces over types for objects',
-          'Use async/await over callbacks',
-          'Keep dependencies minimal',
-          'Write unit tests for business logic'
-        ]
-      },
-      rust: {
-        title: 'Rust',
-        language: 'Rust',
-        description: 'Rust development specialist',
-        buildCmd: 'cargo build',
-        testCmd: 'cargo test',
-        lintCmd: 'cargo clippy',
-        checkCmd: 'cargo check',
-        bestPractices: [
-          'Use Result for error handling',
-          'Prefer owned types unless borrowing is needed',
-          'Use iterators over loops',
-          'Keep unsafe blocks minimal',
-          'Document public APIs'
-        ]
-      },
-      python: {
-        title: 'Python',
-        language: 'Python',
-        description: 'Python development specialist',
-        buildCmd: 'python -m build',
-        testCmd: 'pytest',
-        lintCmd: 'ruff check',
-        checkCmd: 'mypy .',
-        bestPractices: [
-          'Use type hints',
-          'Follow PEP 8 style',
-          'Use virtual environments',
-          'Write docstrings',
-          'Prefer composition over inheritance'
-        ]
-      }
-    };
-
-    return configs[projectType] || configs.node;
-  }
-
-  private getQuickFixes(projectType: string): string {
-    const fixes: Record<string, string> = {
-      go: `- Type errors: Check interface implementations
-- Import errors: Run \`goimports\`
-- Vet warnings: Address them before committing`,
-      node: `- Type errors: Check for missing type definitions
-- Import errors: Verify package.json dependencies
-- Lint errors: Run \`bun run lint\``,
-      rust: `- Borrow checker: Consider using clone() or restructuring
-- Missing traits: Check derive macros
-- Lifetime errors: Simplify lifetimes where possible`,
-      python: `- Type errors: Add type annotations
-- Import errors: Check virtual environment
-- Lint errors: Run \`ruff check --fix\``
-    };
-
-    return fixes[projectType] || fixes.node;
   }
 
   private appendUserContext(markdown: string, userContext: string): string {

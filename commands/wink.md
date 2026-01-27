@@ -4,7 +4,7 @@ description: Analyze session and suggest specialized agents
 argument-hint: "[--apply] [optional context]"
 ---
 
-# Wink - Auto-Generate Agents from Context
+# Wink - Session Analysis & Agent Generation
 
 Analyzes session data and suggests specialized agents based on editing patterns.
 
@@ -12,59 +12,61 @@ Analyzes session data and suggests specialized agents based on editing patterns.
 
 ```
 /wink                    # Show metrics and suggestions
-/wink --apply            # Generate agents with rich content (uses LSP)
-/wink "focus on tests"   # Add context to agents
+/wink --apply            # Generate agent files (Claude-assisted)
+/wink --apply "focus on tests"   # Add context to generated agents
 ```
-
-## How It Works
-
-1. Run the metrics script to get hot files and patterns
-2. If `--apply` is passed, YOU (Claude) generate the agent content using LSP to extract real symbols
 
 Run: bun ${CLAUDE_PLUGIN_ROOT}/dist/commands/wink.js $ARGUMENTS
 
 ## When --apply is used
 
-After running the script above, if `--apply` was passed, you MUST generate rich agent content:
+After running the script above, if `--apply` was passed and agents are suggested, generate them:
 
-For each suggested agent, do the following:
+For each suggested agent:
 
-1. **Read the hot files** in that folder using your Read tool
-2. **Use LSP** (go-to-definition, find-references) to understand the code structure  
-3. **Extract key information**:
-   - Exported functions/classes/types with their signatures
-   - Key patterns and conventions used
-   - Dependencies and relationships between files
-4. **Write the agent file** to `.claude/agents/{name}.md` with this structure:
+1. **Read the hot files** listed in the output using your Read tool
+2. **Analyze the code** to understand:
+   - What functions/classes are exported
+   - What patterns are used
+   - How files relate to each other
+   - What conventions the project follows
+3. **Write the agent file** to the destination shown (e.g., `.claude/agents/{name}.md`)
+
+### Agent File Format
 
 ```markdown
 ---
 name: {folder}-expert
-description: Expert on {folder}/ - knows exports, patterns, conventions
+description: Expert on {folder}/ - knows patterns and conventions
 tools: Read, Grep, Edit, Write
 ---
 
 # {Folder} Expert Agent
 
-## Key Files Summary (Generated: {date})
+Expert on `{folder}/` - [brief description of what this folder contains].
 
-### {file1}.{ext}
-- Exports: {list of exports with signatures}
-- Key patterns: {patterns observed}
-- Depends on: {imports}
+## Architecture Overview
 
-### {file2}.{ext}
+[ASCII diagram or description of how files relate]
+
+## Key Files
+
+### {file1}
+- **Exports**: [list main exports with signatures]
+- **Purpose**: [what this file does]
+
+### {file2}
 ...
 
-## Conventions in {folder}/
+## Conventions
 
-- {convention 1}
-- {convention 2}
+1. [Convention observed in the code]
+2. [Another convention]
 
 ## Common Operations
 
-- To add a new {X}: {steps}
-- To modify {Y}: {steps}
+- **To add a new X**: [steps based on existing patterns]
+- **To modify Y**: [steps]
 ```
 
-This makes the agent actually useful - it carries real knowledge, not just metadata.
+The agent carries real knowledge extracted from the codebase, making it useful for future work in that folder.

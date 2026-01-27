@@ -1,10 +1,61 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { logVerifyResult, updateMetric, VerifyResult, getChangedFiles, getLastVerifyResult, logQualityEvent } from './storage';
+import { logVerifyResult, updateMetric, VerifyResult, getChangedFiles, getLastVerifyResult, logQualityEvent, getBaseline, setBaseline } from './storage';
 import { getConfig, Config } from './config';
 import { SecurityManager } from './security';
 
 const execAsync = promisify(exec);
+
+// File type patterns
+const CODE_FILE_PATTERN = /\.(ts|tsx|js|jsx|go|py|rs|java|cpp|c|h|swift|kt|rb|php)$/;
+const TEST_FILE_PATTERN = /\.(test|spec)\.(ts|tsx|js|jsx)$|_test\.go$|test_.*\.py$|.*_test\.rb$/;
+const CONFIG_FILE_PATTERN = /\.(json|yaml|yml|toml|ini|env)$/;
+const DOC_FILE_PATTERN = /\.(md|txt|rst|adoc)$/;
+
+/**
+ * Determine if a check should run based on changed files
+ * Returns: { run: boolean, reason?: string }
+ */
+function shouldRunCheck(checkName: string, changedFiles: string[]): { run: boolean; reason?: string } {
+  // If no changes tracked, run all checks (manual /verify)
+  if (changedFiles.length === 0) {
+    return { run: true };
+  }
+
+  const hasCodeFiles = changedFiles.some(f => CODE_FILE_PATTERN.test(f));
+  const hasTestFiles = changedFiles.some(f => TEST_FILE_PATTERN.test(f));
+  const hasOnlyDocs = changedFiles.every(f => DOC_FILE_PATTERN.test(f));
+  const hasOnlyConfig = changedFiles.every(f => CONFIG_FILE_PATTERN.test(f) || DOC_FILE_PATTERN.test(f));
+
+  switch (checkName) {
+    case 'typecheck':
+      if (hasOnlyDocs) return { run: false, reason: 'only docs changed' };
+      if (!hasCodeFiles && hasOnlyConfig) return { run: false, reason: 'only config changed' };
+      return { run: true };
+
+    case 'build':
+      if (hasOnlyDocs) return { run: false, reason: 'only docs changed' };
+      return { run: true };
+
+    case 'test':
+      if (hasOnlyDocs) return { run: false, reason: 'only docs changed' };
+      if (!hasCodeFiles && !hasTestFiles) return { run: false, reason: 'no code changes' };
+      return { run: true };
+
+    case 'lint':
+      // Lint can run on more file types
+      if (hasOnlyDocs) return { run: false, reason: 'only docs changed' };
+      return { run: true };
+
+    case 'security':
+      // Security checks should always run if there are code changes
+      if (hasOnlyDocs) return { run: false, reason: 'only docs changed' };
+      return { run: true };
+
+    default:
+      return { run: true };
+  }
+}
 
 export interface CheckResult {
   name: string;
@@ -49,9 +100,20 @@ function buildTargetedLintCommand(baseCommand: string, changedFiles: string[]): 
   return null;
 }
 
-export async function runVerification(mode: 'full' | 'fast' = 'full'): Promise<VerifyResult> {
+export interface SkippedCheck {
+  name: string;
+  reason: string;
+}
+
+export interface ExtendedVerifyResult extends VerifyResult {
+  skipped?: SkippedCheck[];
+  baseline?: Map<string, boolean>;
+}
+
+export async function runVerification(mode: 'full' | 'fast' = 'full'): Promise<ExtendedVerifyResult> {
   const config = await getConfig();
   const checks: CheckResult[] = [];
+  const skipped: SkippedCheck[] = [];
   const startTime = Date.now();
   const previousResult = getLastVerifyResult();
 
@@ -59,26 +121,48 @@ export async function runVerification(mode: 'full' | 'fast' = 'full'): Promise<V
   const changedFiles = getChangedFiles();
   const hasChangedFiles = changedFiles.length > 0;
 
+  // Get or capture baseline (first verify of session establishes baseline)
+  let baseline = getBaseline();
+  const isFirstVerify = baseline === null;
+
   // Run configured checks
   if (mode === 'fast') {
     // Fast mode: only typecheck and lint
     if (config.verifiers.typecheck) {
-      checks.push(await runCheck('typecheck', config.verifiers.typecheck, config.fastVerifyTimeout));
+      const shouldRun = shouldRunCheck('typecheck', changedFiles);
+      if (shouldRun.run) {
+        checks.push(await runCheck('typecheck', config.verifiers.typecheck, config.fastVerifyTimeout));
+      } else if (shouldRun.reason) {
+        skipped.push({ name: 'typecheck', reason: shouldRun.reason });
+      }
     }
     if (config.verifiers.lint) {
-      // Try targeted lint on changed files only
-      const targetedCmd = hasChangedFiles
-        ? buildTargetedLintCommand(config.verifiers.lint, changedFiles)
-        : null;
-      const cmd = targetedCmd || config.verifiers.lint;
-      const label = targetedCmd ? `lint (${changedFiles.length} files)` : undefined;
-      checks.push(await runCheck('lint', cmd, config.fastVerifyTimeout, label));
+      const shouldRun = shouldRunCheck('lint', changedFiles);
+      if (shouldRun.run) {
+        // Try targeted lint on changed files only
+        const targetedCmd = hasChangedFiles
+          ? buildTargetedLintCommand(config.verifiers.lint, changedFiles)
+          : null;
+        const cmd = targetedCmd || config.verifiers.lint;
+        const label = targetedCmd ? `lint (${changedFiles.length} files)` : undefined;
+        checks.push(await runCheck('lint', cmd, config.fastVerifyTimeout, label));
+      } else if (shouldRun.reason) {
+        skipped.push({ name: 'lint', reason: shouldRun.reason });
+      }
     }
   } else {
     // Full mode: run all checks, target lint to changed files
-    // Tests run full suite - Claude can run targeted tests separately if needed
     for (const [name, command] of Object.entries(config.verifiers)) {
       if (!command) continue;
+
+      // Check if this check should run based on changed files
+      const shouldRun = shouldRunCheck(name, changedFiles);
+      if (!shouldRun.run) {
+        if (shouldRun.reason) {
+          skipped.push({ name, reason: shouldRun.reason });
+        }
+        continue;
+      }
 
       // Only lint gets auto-scoped, tests are left for Claude to handle intelligently
       if (name === 'lint' && hasChangedFiles && config.features.fileSpecificChecks) {
@@ -95,11 +179,19 @@ export async function runVerification(mode: 'full' | 'fast' = 'full'): Promise<V
     }
   }
 
-  const result: VerifyResult = {
+  // Capture baseline on first verify
+  if (isFirstVerify && checks.length > 0) {
+    setBaseline(checks.map(c => ({ name: c.name, passed: c.passed })));
+    baseline = getBaseline();
+  }
+
+  const result: ExtendedVerifyResult = {
     mode,
     checks,
     allPassing: checks.every(c => c.passed),
-    duration_ms: Date.now() - startTime
+    duration_ms: Date.now() - startTime,
+    skipped: skipped.length > 0 ? skipped : undefined,
+    baseline: baseline || undefined
   };
 
   const regressionSet = buildRegressionSet(checks, previousResult);
@@ -164,15 +256,28 @@ export async function runFastVerify(config: Config): Promise<CheckResult[]> {
   return results;
 }
 
-export function formatVerifyResult(result: VerifyResult): string {
+export function formatVerifyResult(result: ExtendedVerifyResult): string {
   const lines: string[] = ['📋 Verification Results\n'];
-  
+
+  // Show executed checks
   for (const check of result.checks) {
     const icon = check.passed ? '✅' : '❌';
     const time = `(${(check.duration_ms / 1000).toFixed(1)}s)`;
     const label = check.label || check.name;
-    lines.push(`${icon} ${label} ${time}`);
-    
+
+    // Check if this is a baseline failure (was already failing at session start)
+    let baselineNote = '';
+    if (!check.passed && result.baseline) {
+      const wasPassingAtStart = result.baseline.get(check.name);
+      if (wasPassingAtStart === false) {
+        baselineNote = ' [pre-existing]';
+      } else if (wasPassingAtStart === true) {
+        baselineNote = ' [regression]';
+      }
+    }
+
+    lines.push(`${icon} ${label} ${time}${baselineNote}`);
+
     if (!check.passed && check.output) {
       // Show first few lines of error output
       const errorLines = check.output.split('\n').slice(0, 3);
@@ -184,15 +289,34 @@ export function formatVerifyResult(result: VerifyResult): string {
       }
     }
   }
-  
+
+  // Show skipped checks
+  if (result.skipped && result.skipped.length > 0) {
+    lines.push('');
+    for (const skip of result.skipped) {
+      lines.push(`⏭️  ${skip.name} skipped (${skip.reason})`);
+    }
+  }
+
   lines.push(`\n⏱️  Total time: ${(result.duration_ms / 1000).toFixed(1)}s`);
-  
+
   if (!result.allPassing) {
-    lines.push('\n❌ Some checks failed. Fix the issues before proceeding.');
+    // Check if all failures are pre-existing (not regressions)
+    const hasRegressions = result.checks.some(c => {
+      if (c.passed) return false;
+      if (!result.baseline) return true;
+      return result.baseline.get(c.name) === true; // was passing, now failing
+    });
+
+    if (hasRegressions) {
+      lines.push('\n❌ Regressions detected. Fix the issues before proceeding.');
+    } else {
+      lines.push('\n⚠️  Some checks failing (pre-existing). No new regressions.');
+    }
   } else {
     lines.push('\n✅ All checks passed!');
   }
-  
+
   return lines.join('\n');
 }
 
@@ -257,3 +381,4 @@ function logQualityFailures(
     });
   }
 }
+

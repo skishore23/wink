@@ -1,17 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { AgentGenerator, AgentSuggestion } from '../core/agentGenerator';
+import { describe, it, expect } from 'vitest';
+import { AgentGenerator } from '../core/agentGenerator';
 import { SessionInsights } from '../core/sessionAnalyzer';
-import { resetThreshold } from '../core/thresholdManager';
 
 describe('AgentGenerator', () => {
   const generator = new AgentGenerator();
 
-  beforeEach(() => {
-    // Reset thresholds to defaults to avoid cross-test pollution
-    resetThreshold('folder-expert');
-    resetThreshold('error-fixer');
-    resetThreshold('context-keeper');
-  });
+  // Thresholds are now static (discipline-first architecture)
+  // folder-expert: 20, error-fixer: 3, context-keeper: 5
 
   function createMockInsights(overrides: Partial<SessionInsights> = {}): SessionInsights {
     return {
@@ -76,10 +71,10 @@ describe('AgentGenerator', () => {
       expect(hotFolderAgent?.reason).toContain('25 edits');
     });
 
-    it('skips hot folder agent when edit count < 5', () => {
+    it('skips hot folder agent when edit count < threshold (20)', () => {
       const insights = createMockInsights({
         hotFolders: [
-          { path: '/project/src/hooks', editCount: 3, readCount: 5 }
+          { path: '/project/src/hooks', editCount: 15, readCount: 5 }
         ]
       });
 
@@ -140,8 +135,8 @@ describe('AgentGenerator', () => {
 
       const langAgent = suggestions.find(s => s.name === 'go-specialist');
       expect(langAgent).toBeDefined();
-      expect(langAgent?.markdown).toContain('go build');
-      expect(langAgent?.markdown).toContain('go test');
+      expect(langAgent?.markdown).toContain('Go');
+      expect(langAgent?.markdown).toContain('.wink/config.json');
     });
 
     it('skips language specialist for unknown project type', () => {
@@ -188,7 +183,7 @@ describe('AgentGenerator', () => {
 
     it('appends user context to all agents when provided', () => {
       const insights = createMockInsights({
-        hotFolders: [{ path: '/project/src/api', editCount: 10, readCount: 5 }]
+        hotFolders: [{ path: '/project/src/api', editCount: 25, readCount: 5 }]
       });
       const userContext = 'Focus on REST API endpoints';
 
@@ -203,7 +198,7 @@ describe('AgentGenerator', () => {
 
     it('generates valid markdown frontmatter', () => {
       const insights = createMockInsights({
-        hotFolders: [{ path: '/project/src/core', editCount: 15, readCount: 10 }]
+        hotFolders: [{ path: '/project/src/core', editCount: 25, readCount: 10 }]
       });
 
       const suggestions = generator.generate(insights);

@@ -4,11 +4,33 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getDb, getCurrentSessionId, getLastVerifyResult, getQualityEvents } from '../core/storage';
 import { analyzeContextHygiene, formatHygieneWarning } from '../core/contextHygiene';
+import { readStdin } from '../core/hookRunner';
+import { isSubstantialTask } from '../core/intentDetector';
+import { createIntent, isLikelyContinuation } from '../core/intentTracker';
+
+interface UserPromptInput {
+  user_prompt?: string;
+}
 
 // Minimal session context - current session only, from database
 
 async function main() {
   try {
+    // Read input to get user prompt
+    let userPrompt: string | undefined;
+    try {
+      const inputData = await readStdin();
+      const input: UserPromptInput = JSON.parse(inputData);
+      userPrompt = input.user_prompt;
+    } catch {
+      // If no stdin or parse error, continue without intent capture
+    }
+
+    // Silent intent capture - user sees nothing
+    if (userPrompt && isSubstantialTask(userPrompt) && !isLikelyContinuation(userPrompt)) {
+      createIntent(userPrompt);
+    }
+
     const db = getDb();
     const sessionId = getCurrentSessionId();
     const parts: string[] = [];

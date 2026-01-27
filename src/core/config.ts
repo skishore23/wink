@@ -11,6 +11,9 @@ export interface Config {
     onlyAfterEdits: boolean;  // Only enforce verification if edits were made
     scopeToEditedFiles: boolean;  // Only verify files that were edited
   };
+  intentGuardian: {
+    enabled: boolean;  // Enable intent tracking and verification
+  };
   autoVerify: {
     enabled: boolean;
     showStatus: boolean;
@@ -80,6 +83,9 @@ const DEFAULT_CONFIG: Config = {
     onlyAfterEdits: true,  // Don't require verify for pure analysis sessions
     scopeToEditedFiles: false  // Verify all checks, not just edited files
   },
+  intentGuardian: {
+    enabled: true  // Track and verify task completion
+  },
   autoVerify: {
     enabled: true,
     showStatus: true,
@@ -91,7 +97,7 @@ const DEFAULT_CONFIG: Config = {
   verifyTimeout: 120,
   fastVerifyTimeout: 30,
   feedback: {
-    showActivity: true,
+    showActivity: false,  // Quiet by default - enable for debugging
     colors: true,
     prefix: 'wink'
   },

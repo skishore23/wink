@@ -151,14 +151,20 @@ export function printSection(title: string): void {
 
 /**
  * Print a one-line summary
+ * Duration is omitted if > 24 hours (meaningless for aggregated sessions)
  */
 export function printSummary(projectType: string, edits: number, reads: number, duration: number): void {
   const parts = [
     fmt.muted(projectType),
     `${fmt.success(String(edits))} edits`,
     `${fmt.primary(String(reads))} reads`,
-    `${duration}min`,
   ];
+
+  // Only show duration if less than 24 hours (1440 min) - otherwise it's wall clock time
+  if (duration > 0 && duration < 1440) {
+    parts.push(`${duration}min`);
+  }
+
   console.log(parts.join(` ${fmt.muted(icons.dot)} `));
   console.log();
 }
@@ -499,6 +505,40 @@ export function printLearningReport(report: {
       console.log(`    ${fmt.muted(icons.bullet)} ${insight}`);
     }
   }
-  
+
+  console.log();
+}
+
+/**
+ * Print simplified learning report (no auto-adjustments)
+ */
+export function printSimpleLearningReport(report: {
+  errorSummary: Array<{ category: string; count: number }>;
+  thresholds: Array<{ agentType: string; thresholdValue: number }>;
+  insights: string[];
+}): void {
+  console.log();
+  printSection('learning data');
+  console.log();
+
+  // Error summary
+  if (report.errorSummary.length > 0) {
+    console.log(`  ${fmt.bold('errors by category')}`);
+    for (const error of report.errorSummary.slice(0, 5)) {
+      console.log(`    ${error.category}: ${error.count}`);
+    }
+  } else {
+    console.log(`  ${fmt.muted('no errors recorded')}`);
+  }
+
+  // Insights
+  if (report.insights.length > 0) {
+    console.log();
+    console.log(`  ${fmt.bold('insights')}`);
+    for (const insight of report.insights) {
+      console.log(`    ${fmt.muted(icons.bullet)} ${insight}`);
+    }
+  }
+
   console.log();
 }

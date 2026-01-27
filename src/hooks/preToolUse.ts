@@ -5,10 +5,7 @@ import {
   getMode,
   getDb,
   getCurrentSessionId,
-  updateMetric,
-  logAgentSpawn,
-  getSessionReadCount,
-  getSessionErrorCount
+  updateMetric
 } from '../core/storage';
 import { getConfig } from '../core/config';
 import * as path from 'path';
@@ -57,10 +54,8 @@ async function main() {
     } else if (toolName === 'Grep') {
       // Search tools: check for search loop blocking
       output = await checkSearchLoop(input);
-    } else if (toolName === 'Task') {
-      // Agent spawn: capture baselines for effectiveness tracking
-      await captureAgentBaselines(input);
     }
+    // Task tools: no pre-check needed (removed self-learning)
 
     console.log(JSON.stringify(output));
   } catch {
@@ -208,54 +203,6 @@ function formatBlockReason(file: string): string {
     "",
     "Then retry the edit."
   ].join('\n');
-}
-
-/**
- * Capture baselines when an agent (Task tool) is spawned
- * This allows us to measure effectiveness by comparing before/after metrics
- */
-async function captureAgentBaselines(input: PreToolUseInput): Promise<void> {
-  try {
-    // Extract agent info from tool_input
-    const description = input.tool_input.description as string || '';
-    const subagentType = input.tool_input.subagent_type as string || 'general';
-    const prompt = input.tool_input.prompt as string || '';
-
-    // Determine agent type from subagent_type
-    let agentType = 'general';
-    if (subagentType) {
-      if (subagentType.includes('expert') || subagentType.includes('Explore')) {
-        agentType = 'folder-expert';
-      } else if (subagentType.includes('Plan')) {
-        agentType = 'context-keeper';
-      } else if (subagentType.toLowerCase().includes('test') || subagentType.toLowerCase().includes('lint')) {
-        agentType = 'quality-guard';
-      } else {
-        agentType = subagentType.toLowerCase().replace(/[^a-z-]/g, '-');
-      }
-    }
-
-    const agentName = description || `${agentType}-agent`;
-
-    // Capture current metrics as baselines BEFORE agent runs
-    const readsAtSpawn = getSessionReadCount();
-    const errorsAtSpawn = getSessionErrorCount();
-
-    // Log the agent spawn with baselines
-    logAgentSpawn(
-      {
-        agentName,
-        agentType,
-        triggerContext: prompt.slice(0, 200)
-      },
-      {
-        readsAtSpawn,
-        errorsAtSpawn
-      }
-    );
-  } catch {
-    // Silently fail - don't break the hook
-  }
 }
 
 if (import.meta.main) {

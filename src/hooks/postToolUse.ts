@@ -5,17 +5,13 @@ import {
   getDb,
   getCurrentSessionId,
   markFileRead,
-  markFileGrepped,
-  updateAgentOutcome,
-  getActiveAgentUsage,
-  getSessionReadCount,
-  getSessionErrorCount
+  markFileGrepped
 } from '../core/storage';
 import { detectLoops, shouldWarnAboutLoop } from '../core/loopDetection';
 import { getConfig } from '../core/config';
 import { readStdin } from '../core/hookRunner';
 import { colors as c } from './utils';
-import { processError } from '../core/errorLearning';
+import { logError } from '../core/errorLearning';
 
 // Cache for showActivity setting
 let showActivity: boolean | null = null;
@@ -103,8 +99,6 @@ async function main() {
     const input: PostToolUseInput = JSON.parse(inputData);
 
     // Derive success and output from tool_response
-    // Note: PostToolUse hooks are only called for SUCCESSFUL tool invocations
-    // Failed tool calls (e.g., file not found) don't trigger this hook
     const success = isSuccessful(input.tool_name, input.tool_response);
     const outputText = getOutputText(input.tool_response);
 
@@ -119,9 +113,9 @@ async function main() {
       timestamp: Date.now()
     });
 
-    // Track errors for learning (if tool failed)
+    // Track errors for analysis (if tool failed)
     if (!success && outputText) {
-      trackErrorForLearning(input.tool_name, outputText);
+      trackErrorForAnalysis(input.tool_name, outputText);
     }
 
     // Balanced feedback for significant operations (if enabled)
@@ -134,7 +128,7 @@ async function main() {
 
     let additionalContext: string | undefined;
 
-    // Detect tool type from tool_name instead of action argument
+    // Detect tool type from tool_name
     const toolName = input.tool_name;
 
     if (['Read', 'View'].includes(toolName)) {
@@ -152,17 +146,15 @@ async function main() {
         additionalContext = searchLoopWarning.message;
       }
     } else if (toolName === 'Task') {
-      // Agent completed - track usage and save summary
-      await trackAgentCompletion(input, success);
+      // Agent completed - save summary for context
       await saveAgentSummary();
     }
-    // Edit tools handled by preToolUse, no additional context needed here
-    
+
     const output: PostToolUseOutput = {};
     if (additionalContext) {
       output.additionalContext = additionalContext;
     }
-    
+
     console.log(JSON.stringify(output));
   } catch (err) {
     // Log error but don't break Claude's flow
@@ -174,8 +166,6 @@ async function main() {
 }
 
 async function handleFileRead(input: PostToolUseInput) {
-  // Note: This hook is only called for SUCCESSFUL reads
-  // Failed reads (file not found, etc.) don't trigger PostToolUse hooks
   const filePath = input.tool_input.file_path as string;
   if (filePath) {
     // Track successful reads as evidence
@@ -197,11 +187,11 @@ async function handleSearchComplete(input: PostToolUseInput, success: boolean, o
     // Parse grep results to find matched files
     const pattern = input.tool_input.pattern as string;
     const output = outputText;
-    
+
     // Simple parser for grep output (files_with_matches mode)
     const lines = output.split('\n').filter(l => l.trim());
     let trackedCount = 0;
-    
+
     for (const line of lines) {
       // Grep output format varies, but file paths are usually at the start
       const match = line.match(/^([^:]+):/);
@@ -215,7 +205,7 @@ async function handleSearchComplete(input: PostToolUseInput, success: boolean, o
         trackedCount++;
       }
     }
-    
+
     // Balanced feedback - subtle wink indicator (if enabled)
     if (trackedCount > 0 && await shouldShowActivity()) {
       process.stderr.write(`${c.dim}● wink · grep: ${trackedCount} file${trackedCount > 1 ? 's' : ''}${c.reset}\n`);
@@ -224,65 +214,17 @@ async function handleSearchComplete(input: PostToolUseInput, success: boolean, o
 }
 
 /**
- * Track errors for the learning system
+ * Track errors for Claude to analyze
  */
-function trackErrorForLearning(toolName: string, errorText: string): void {
+function trackErrorForAnalysis(toolName: string, errorText: string): void {
   try {
     // Only process substantial error messages
     if (errorText.length < 10) return;
 
-    // Process and store the error
-    const result = processError(errorText);
-
-    if (process.env.WINK_DEBUG) {
-      console.error(`Error tracked: pattern=${result.patternId} category=${result.normalized.category}`);
-    }
+    // Log the error for analysis
+    logError(errorText);
   } catch {
     // Silently fail - don't break the hook
-  }
-}
-
-/**
- * Track agent completion for self-learning system
- * Finds the active agent spawn (from PreToolUse) and updates its outcome
- */
-async function trackAgentCompletion(input: PostToolUseInput, success: boolean): Promise<void> {
-  try {
-    // Find the active (incomplete) agent usage record created by PreToolUse
-    const activeUsage = getActiveAgentUsage();
-
-    if (!activeUsage) {
-      // No active spawn found - this shouldn't happen normally
-      // But could happen if PreToolUse hook didn't run
-      if (process.env.WINK_DEBUG) {
-        console.error('No active agent usage found to update');
-      }
-      return;
-    }
-
-    // Get current metrics AFTER agent ran
-    const readsAfter = getSessionReadCount();
-    const errorsAfter = getSessionErrorCount();
-
-    // Update the outcome
-    updateAgentOutcome(activeUsage.id, {
-      taskSuccess: success,
-      readsAfter,
-      errorsAfter
-    });
-
-    // Log for debugging
-    if (process.env.WINK_DEBUG) {
-      const fs = await import('fs');
-      const path = await import('path');
-      const logPath = path.join(process.cwd(), '.wink', 'debug.log');
-      fs.appendFileSync(logPath, `[${new Date().toISOString()}] Agent completed: ${activeUsage.agentName} success=${success} reads=${readsAfter} errors=${errorsAfter}\n`);
-    }
-  } catch (err) {
-    // Silently fail - don't break the hook
-    if (process.env.WINK_DEBUG) {
-      console.error('Agent tracking error:', err);
-    }
   }
 }
 

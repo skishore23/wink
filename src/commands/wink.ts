@@ -2,16 +2,16 @@
 
 /**
  * Wink Command
- * 
- * Analyzes session data and suggests specialized agents.
- * Uses hybrid approach: hooks collect metrics, Claude generates rich content.
+ *
+ * Analyzes session data and outputs raw metrics for Claude to analyze.
+ * Discipline-first: collects data, lets Claude reason about improvements.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { SessionAnalyzer, SessionInsights } from '../core/sessionAnalyzer';
-import { runLearningCycle } from '../core/learningEngine';
-import { adjustThresholdsForEfficiency } from '../core/thresholdManager';
+import { generateLearningReport } from '../core/learningEngine';
+import { getThresholdSync, getThresholds } from '../core/thresholdManager';
 import * as print from '../core/printer';
 
 // ============================================================================
@@ -28,82 +28,19 @@ interface ArtifactSuggestion {
   destination: string;
 }
 
-interface Suggestion {
-  date: string;
-  type: ArtifactType;
-  name: string;
-  reason: string;
-  created: boolean;
-  outcome?: string;
-}
-
-interface WinkLearnings {
-  suggestions: Suggestion[];
-  patterns: {
-    hotFolderThreshold: number;
-    contextLossThreshold: number;
-    effectiveAgents: string[];
-    ineffectivePatterns: string[];
-  };
-  insights: string[];
-}
-
-const DEFAULT_LEARNINGS: WinkLearnings = {
-  suggestions: [],
-  patterns: {
-    hotFolderThreshold: 20,
-    contextLossThreshold: 8,
-    effectiveAgents: [],
-    ineffectivePatterns: []
-  },
-  insights: []
-};
-
-// ============================================================================
-// Persistence
-// ============================================================================
-
-const getLearningsPath = (): string => 
-  path.join(process.cwd(), '.wink', 'learnings.json');
-
-const loadLearnings = (): WinkLearnings => {
-  try {
-    const filePath = getLearningsPath();
-    if (fs.existsSync(filePath)) {
-      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    }
-  } catch {
-    // Return default on error
-  }
-  return { ...DEFAULT_LEARNINGS };
-};
-
-const saveLearnings = (learnings: WinkLearnings): void => {
-  try {
-    const filePath = getLearningsPath();
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(filePath, JSON.stringify(learnings, null, 2));
-  } catch {
-    // Silently fail
-  }
-};
-
 // ============================================================================
 // Artifact checking
 // ============================================================================
 
 const checkArtifactExists = (type: ArtifactType, name: string): boolean => {
   const base = process.cwd();
-  
+
   switch (type) {
     case 'agent':
       return fs.existsSync(path.join(base, '.claude', 'agents', `${name}.md`));
     case 'skill':
       return fs.existsSync(path.join(base, '.claude', 'skills', `${name}.md`)) ||
-             fs.existsSync(path.join(base, '.claude', 'commands', `${name}.md`));
+        fs.existsSync(path.join(base, '.claude', 'commands', `${name}.md`));
     case 'command':
       return fs.existsSync(path.join(base, '.claude', 'commands', `${name}.md`));
     case 'rule':
@@ -113,47 +50,6 @@ const checkArtifactExists = (type: ArtifactType, name: string): boolean => {
     default:
       return false;
   }
-};
-
-// ============================================================================
-// Analysis
-// ============================================================================
-
-const analyzeOutcomes = (learnings: WinkLearnings, insights: SessionInsights): string[] => {
-  const newInsights: string[] = [];
-
-  for (const suggestion of learnings.suggestions) {
-    if (suggestion.type === 'agent' && !suggestion.outcome) {
-      const exists = checkArtifactExists('agent', suggestion.name);
-
-      if (exists) {
-        suggestion.created = true;
-        const relatedReads = insights.loopPatterns.filter(l =>
-          suggestion.name.includes(l.fileName.replace('.ts', '').split('/').pop() || '')
-        );
-
-        if (relatedReads.length === 0 || relatedReads.every(r => r.readCount < 5)) {
-          suggestion.outcome = 'helped reduce re-reads';
-          if (!learnings.patterns.effectiveAgents.includes(suggestion.name)) {
-            learnings.patterns.effectiveAgents.push(suggestion.name);
-          }
-          newInsights.push(`${suggestion.name} agent reduced context loss`);
-        }
-      }
-    }
-  }
-
-  if (learnings.suggestions.length >= 3) {
-    const created = learnings.suggestions.filter(s => s.created).length;
-    const adoptionRate = created / learnings.suggestions.length;
-
-    if (adoptionRate < 0.3 && !learnings.insights.includes('suggestions often ignored')) {
-      newInsights.push('suggestions often ignored - may need higher thresholds');
-      learnings.patterns.hotFolderThreshold = Math.min(50, learnings.patterns.hotFolderThreshold + 10);
-    }
-  }
-
-  return newInsights;
 };
 
 // ============================================================================
@@ -178,9 +74,9 @@ const findExistingAgents = (insights: SessionInsights): Array<{ name: string; fo
   return existing;
 };
 
-const generateSuggestions = (insights: SessionInsights, learnings: WinkLearnings): ArtifactSuggestion[] => {
+const generateSuggestions = (insights: SessionInsights): ArtifactSuggestion[] => {
   const suggestions: ArtifactSuggestion[] = [];
-  const threshold = learnings.patterns.hotFolderThreshold;
+  const threshold = getThresholdSync('folder-expert');
   const suggestedFolders = new Set<string>();
   const projectRoot = process.cwd();
 
@@ -244,13 +140,6 @@ async function main(): Promise<void> {
   // Analyze all sessions
   const analyzer = new SessionAnalyzer({ allSessions: true });
   const insights = analyzer.analyze();
-  const learnings = loadLearnings();
-
-  // Analyze outcomes
-  const newInsights = analyzeOutcomes(learnings, insights);
-  if (newInsights.length > 0) {
-    learnings.insights.push(...newInsights);
-  }
 
   // Print metrics
   print.printHeader();
@@ -260,11 +149,8 @@ async function main(): Promise<void> {
   print.printErrors(insights.commonErrors);
   print.printContextHygiene(insights.contextHygiene);
 
-  // Adjust thresholds based on efficiency (self-improving)
-  const efficiencyAdjustments = adjustThresholdsForEfficiency(insights.contextHygiene.efficiency.score);
-
   // Generate and display suggestions
-  const suggestions = generateSuggestions(insights, learnings);
+  const suggestions = generateSuggestions(insights);
   const existingAgents = findExistingAgents(insights);
   const newAgents = suggestions.filter(s => s.type === 'agent');
   const rules = suggestions.filter(s => s.type === 'rule');
@@ -287,7 +173,7 @@ async function main(): Promise<void> {
     print.printRules(rules.map(r => ({ name: r.name, evidence: r.metricEvidence })));
   }
 
-  // Handle --apply mode
+  // Handle --apply mode - show generation instructions for Claude
   if (applyMode) {
     if (newAgents.length === 0) {
       print.printNoAgentsToGenerate();
@@ -320,48 +206,16 @@ async function main(): Promise<void> {
     print.printApplyHint();
   }
 
-  // Print learnings
-  print.printLearnings({
-    effectiveAgents: learnings.patterns.effectiveAgents,
-    insights: learnings.insights,
-  });
-
-  print.printThresholds(learnings.patterns.hotFolderThreshold, learnings.patterns.contextLossThreshold);
-
-  // Run and display learning report
-  const learningReport = runLearningCycle(30);
-
-  // Merge efficiency-based adjustments into report
-  if (efficiencyAdjustments.length > 0) {
-    learningReport.thresholdAdjustments.push(...efficiencyAdjustments);
-    learningReport.insights.push(
-      `Adjusted ${efficiencyAdjustments.length} threshold(s) based on efficiency score (${insights.contextHygiene.efficiency.score}/100)`
-    );
+  // Print current thresholds (static values for Claude to see)
+  const thresholds = getThresholds();
+  console.log('\ncurrent thresholds');
+  for (const t of thresholds) {
+    console.log(`  ${t.agentType}: ${t.thresholdValue}`);
   }
 
-  print.printLearningReport(learningReport);
-
-  // Record suggestions
-  const today = new Date().toISOString().split('T')[0];
-  for (const s of suggestions) {
-    const existing = learnings.suggestions.find(ls => ls.name === s.name && ls.date === today);
-    if (!existing) {
-      learnings.suggestions.push({
-        date: today,
-        type: s.type,
-        name: s.name,
-        reason: s.metricEvidence,
-        created: checkArtifactExists(s.type, s.name)
-      });
-    }
-  }
-
-  // Keep only last 20 suggestions
-  if (learnings.suggestions.length > 20) {
-    learnings.suggestions = learnings.suggestions.slice(-20);
-  }
-
-  saveLearnings(learnings);
+  // Print learning data
+  const learningReport = generateLearningReport();
+  print.printSimpleLearningReport(learningReport);
 }
 
 main().catch(err => {

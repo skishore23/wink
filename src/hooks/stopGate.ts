@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Stop gate - blocks Claude from stopping when verification needed
 
-import { getDb, getCurrentSessionId, getLastVerifyResult, logDecision, updateMetric } from '../core/storage';
+import { getDb, getCurrentSessionId, getLastVerifyResult, logDecision, updateMetric, getBaseline } from '../core/storage';
 import { readStdin } from '../core/hookRunner';
 import { analyzeContextHygiene, formatSessionSummary } from '../core/contextHygiene';
 import { getConfig } from '../core/config';
+import { generateIntentCheck, completeActiveIntent, getActiveIntent } from '../core/intentTracker';
 import * as path from 'path';
 
 
@@ -80,16 +81,33 @@ async function stopGate(_input: StopGateInput): Promise<StopGateOutput> {
       return blockWith(`✗ wink · no verification run`, `Run /verify to check your changes`);
     }
 
-    // Check 2: Is last verification passing?
+    // Check 2: Is last verification passing? (Allow pre-existing failures)
     const lastVerify = getLastVerifyResult();
+    const baseline = getBaseline();
 
     if (lastVerify && !lastVerify.allPassing) {
-      const failing = lastVerify.checks.filter(c => !c.passed).map(c => c.name);
+      const failing = lastVerify.checks.filter(c => !c.passed);
 
-      logDecision({ decisionType: 'stop_gate', decision: 'block', reason: 'verification_failing' });
-      updateMetric('stop_blocks');
+      // Check if any failures are regressions (were passing at session start)
+      const regressions = failing.filter(check => {
+        if (!baseline) return true; // No baseline = treat as regression
+        const wasPassingAtStart = baseline.get(check.name);
+        return wasPassingAtStart === true; // Was passing, now failing = regression
+      });
 
-      return blockWith(`✗ wink · ${failing.join(', ')} failing`, `Run /verify and fix the failing checks`);
+      if (regressions.length > 0) {
+        // Block only for regressions
+        const regressedNames = regressions.map(c => c.name);
+        logDecision({ decisionType: 'stop_gate', decision: 'block', reason: 'verification_regression' });
+        updateMetric('stop_blocks');
+
+        return blockWith(
+          `✗ wink · regression: ${regressedNames.join(', ')}`,
+          `These checks were passing but now fail. Fix them before stopping`
+        );
+      }
+      // All failures are pre-existing - allow stop with warning
+      process.stderr.write(`\n\x1b[2m⚠️  Pre-existing failures: ${failing.map(c => c.name).join(', ')} (not blocking)\x1b[0m\n`);
     }
 
     // Check 3: Any edits since last verify?
@@ -120,9 +138,32 @@ async function stopGate(_input: StopGateInput): Promise<StopGateOutput> {
       );
     }
 
+    // Check 4: Intent verification (if Intent Guardian is enabled)
+    if (config.intentGuardian?.enabled !== false) {
+      const activeIntent = getActiveIntent();
+      if (activeIntent && hasEdits) {
+        const intentCheck = generateIntentCheck();
+        if (intentCheck) {
+          logDecision({ decisionType: 'stop_gate', decision: 'block', reason: 'intent_verification' });
+          updateMetric('stop_blocks');
+
+          // Clear the intent after showing the check (Claude will self-verify)
+          completeActiveIntent();
+
+          return {
+            decision: "block",
+            reason: intentCheck
+          };
+        }
+      }
+    }
+
     // All checks passed - show session summary
     logDecision({ decisionType: 'stop_gate', decision: 'allow' });
     updateMetric('stop_allows');
+
+    // Clear any remaining intent
+    completeActiveIntent();
 
     // Display session hygiene summary
     const hygiene = analyzeContextHygiene(sessionId);
