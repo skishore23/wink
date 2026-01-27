@@ -227,14 +227,11 @@ When you run `/wink --apply`, Claude automatically generates agents:
 │     e.g., core-expert.md             │
 └──────────────────────────────────────┘
 ```
-
-**No hardcoded templates** - Claude reads your actual code and generates documentation specific to your project. Each agent carries real knowledge about your codebase.
-
 ---
 
 ## Intent Guardian
 
-Wink silently captures your task intent and verifies Claude completes it:
+Wink captures your task intent and verifies Claude completes it:
 
 ```
 User: "Refactor auth to use JWT, add rate limiting, update docs"
