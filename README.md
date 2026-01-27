@@ -141,13 +141,13 @@ current thresholds
 Based on this data, what improvements would you suggest?
 ```
 
-Run `/wink --apply` to have Claude generate the suggested agents. Claude reads your actual code and creates comprehensive documentation - no hardcoded templates.
+Run `/wink --apply` to have Claude generate the suggested agents.
 
 ---
 
 ## How It Works
 
-### Discipline-First Architecture
+### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
